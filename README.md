@@ -5,9 +5,11 @@
 
 MSPA-Lib es una librería conceptual para dotar agentes autónomos de personalidad, valores, metas, creencias subjetivas, emociones, ánimo, memoria, relaciones, aprendizaje y preferencias de acción explicables. También busca permitir que prácticas, normas y cultura puedan emerger de la interacción entre agentes sin convertir “la cultura” en una entidad omnisciente separada.
 
-> Estado actual: **diseño lógico / arquitectura candidata v2.4**. No existe implementación de producción todavía.
+> Estado actual: **diseño lógico / arquitectura candidata v2.4 + planificación de arquitectura de código v0.1**. No existe implementación de producción todavía.
 
 La librería está pensada para ser desacoplada del motor y del género de juego. El host describe qué ocurre, qué puede percibirse, qué acciones son realmente posibles y cuál fue su resultado. MSPA interpreta esos datos desde la perspectiva subjetiva de cada agente y devuelve estado psicológico, intención y explicación.
+
+Los juegos consumidores están **fuera** de MSPA. MSPA proporciona el core, el contrato y conectores genéricos; cada proyecto externo realiza su propio mapeo de entidades, eventos y acciones.
 
 ## Contrato conceptual
 
@@ -31,7 +33,7 @@ MSPA aprende / actualiza
 
 Además:
 
-- todas las operaciones relevantes llevan tiempo lógico;
+- todas las operaciones relevantes llevan tiempo lógico entero;
 - `ADVANCE_TO` existe para agentes dormidos, hitos y actualización temporal explícita, no como tick obligatorio;
 - `EXPORT / IMPORT` permite persistir o trasladar estado psicológico entre runtimes o mundos;
 - existen formas batch conceptuales con orden canónico y determinismo equivalente al procesamiento individual.
@@ -53,11 +55,11 @@ Además:
 - El runtime debe ser explicable, reproducible, portable y resistente a datos externos no confiables.
 - Los estados y packs importados deben respetar límites de tamaño y complejidad.
 - El diseño debe escalar mediante evaluación perezosa, niveles de simulación y batching determinista.
-- La integración de cada juego se describe mediante un **Domain Pack** versionado.
+- MSPA define el **contrato de Domain Pack**; los Domain Packs concretos pertenecen a los proyectos consumidores.
 
 ## Arquitectura vigente
 
-La versión actual es **MSPA v2.4 — arquitectura candidata**. Todavía no está congelada.
+La versión lógica actual es **MSPA v2.4 — arquitectura candidata**. La planificación de código actual es **v0.1**. Ninguna está congelada todavía.
 
 Antes de fijar una API de producción deben validarse en sandbox:
 
@@ -70,13 +72,11 @@ Antes de fijar una API de producción deben validarse en sandbox:
 - aprendizaje causal simple;
 - determinismo individual y batch;
 - migración de agentes entre mundos;
-- importación segura de estados y packs;
-- divergencia y contacto cultural;
-- un Domain Pack realista de Isla Viva.
+- importación segura de estados y packs.
 
 ## Domain Packs
 
-Un juego no modifica el core para enseñarle sus conceptos. Entrega un Domain Pack con:
+Un juego no modifica el core para enseñarle sus conceptos. El proyecto consumidor mantiene externamente un Domain Pack con:
 
 - vocabulario propio;
 - Predicate Schemas;
@@ -85,27 +85,27 @@ Un juego no modifica el core para enseñarle sus conceptos. Entrega un Domain Pa
 - reglas de inferencia;
 - consideraciones y curvas;
 - ContextTags y OutcomeTags de aprendizaje;
-- compatibilidad y namespaces;
-- límites de seguridad.
+- compatibilidad y namespaces.
 
-MSPA debe incluir además un **Core Psychology Pack** con semántica psicológica general.
+MSPA define el formato, lo valida y lo consume. El pack concreto no vive dentro de MSPA.
 
 ## Candidatos técnicos
 
-Todavía **no se ha autorizado implementación**.
+Todavía **no se ha autorizado implementación de producción**.
 
-Como candidatos actuales:
+Candidatos actuales:
 
-- **Sandbox:** Python, con escenarios neutrales reutilizables después como suite de conformidad.
-- **Producción:** Rust con ABI C estable como frontera de integración.
+- **Sandbox:** escenarios neutrales reutilizables después como suite de conformidad; la herramienta concreta puede ser desechable.
+- **Producción:** C++ nativo como candidato principal, con fachada C opcional para bindings externos.
 
-Estas elecciones siguen siendo candidatas y deben validarse contra el sandbox y el `IslaVivaPsychPack`. No se ha congelado ABI, serialización, build system ni bindings.
+Todavía no están congelados ABI, serialización, build system, threading model ni bindings.
 
 ## Documentación vigente
 
 - [`docs/MSPA-SPEC-v2.4.md`](docs/MSPA-SPEC-v2.4.md) — arquitectura lógica candidata actual.
 - [`docs/MSPA-INTERACTION-CONTRACT-v0.2.md`](docs/MSPA-INTERACTION-CONTRACT-v0.2.md) — contrato `OBSERVE / DECIDE / REPORT / ADVANCE_TO / EXPORT-IMPORT`.
 - [`docs/MSPA-DOMAIN-PACK-CONTRACT-v0.1.md`](docs/MSPA-DOMAIN-PACK-CONTRACT-v0.1.md) — contrato de integración semántica por juego.
+- [`docs/MSPA-CODE-ARCHITECTURE-v0.1.md`](docs/MSPA-CODE-ARCHITECTURE-v0.1.md) — planificación de módulos, ownership, dependencias, runtime, conectores y orden de implementación.
 
 ### Historial conservado
 
@@ -115,18 +115,13 @@ Estas elecciones siguen siendo candidatas y deben validarse contra el sandbox y 
 
 ## Próxima prueba de diseño
 
-Antes de escribir el runtime de producción debe existir un **`IslaVivaPsychPack v0.1`** suficientemente completo para representar sin excepciones específicas dentro de MSPA:
+Antes de escribir el runtime de producción deben existir escenarios neutrales de conformidad suficientes para validar al menos:
 
-- necesidades;
-- familia;
-- trabajo;
-- propiedad;
-- nacimiento y muerte;
-- duelo;
-- visitantes y viajeros;
-- aprendizaje;
-- transmisión de creencias;
-- influencia divina;
-- choque de normas entre comunidades.
+- el caso Mara con perfiles distintos;
+- una influencia externa;
+- un viajero con referencias/namespaces externos;
+- evidencia contradictoria;
+- aprendizaje de una acción;
+- histéresis entre acciones casi empatadas.
 
-Si Isla Viva exige excepciones internas en el core para expresar estos casos, el contrato todavía no está listo.
+Después, cada proyecto consumidor integrará MSPA desde su propio repositorio mediante los conectores y contratos públicos, sin introducir clases específicas de ese proyecto dentro del core.
