@@ -2,15 +2,11 @@
 
 ## Estado
 
-Contrato lógico candidato. No es todavía una API de producción ni define sintaxis concreta, lenguaje, ABI o formato de serialización.
+Contrato lógico candidato. No define sintaxis concreta, ABI ni formato de serialización.
 
-Este documento fija qué intercambian el host y MSPA y qué garantías lógicas deben conservarse entre implementaciones.
+Este documento fija qué intercambian el host y MSPA y qué garantías lógicas deben conservarse entre implementaciones. No contiene escenarios, nombres ni reglas de proyectos consumidores.
 
----
-
-# 1. Operaciones fundamentales
-
-MSPA se organiza alrededor de cinco operaciones conceptuales:
+## 1. Operaciones fundamentales
 
 1. `OBSERVE`
 2. `DECIDE`
@@ -20,31 +16,23 @@ MSPA se organiza alrededor de cinco operaciones conceptuales:
 
 Todas las operaciones relevantes llevan tiempo lógico explícito.
 
----
-
-# 2. OBSERVE
-
-## Entrada conceptual
+## 2. OBSERVE
 
 `OBSERVE(agent, stimulus, time)`
 
 El host entrega sólo información a la que el agente tuvo acceso.
 
-Un estímulo puede representar:
-
+Un `Stimulus` puede representar:
 - evento físico;
 - testimonio;
-- resultado observado de otro;
+- resultado observado;
 - estado interno;
 - cambio ambiental;
-- inspiración o influencia;
-- comunicación social;
+- influencia externa;
+- comunicación;
 - recordatorio contextual.
 
-## Stimulus
-
 Campos conceptuales:
-
 - `StimulusId`
 - `StimulusType`
 - `source`
@@ -54,62 +42,45 @@ Campos conceptuales:
 - `salience`
 - `namespace`
 - `timestamp`
-- metadatos opcionales del Domain Pack
+- metadatos opcionales validados.
 
-## Salida conceptual
-
-`OBSERVE` no selecciona una acción, pero devuelve información de scheduling:
-
+Salida:
 - `state_changed`
 - `decision_recommended`
 - `urgency`
 - `current_action_threatened`
-- `diagnostic_token` opcional
+- `diagnostic_token` opcional.
 
-Esto permite que el host llame inmediatamente a `DECIDE` cuando el estímulo vuelve obsoleta o peligrosa la conducta actual.
+`OBSERVE` no selecciona acciones.
 
----
-
-# 3. DECIDE
-
-## Entrada conceptual
+## 3. DECIDE
 
 `DECIDE(agent, available_actions, current_action?, time)`
 
 Puede llamarse sin un `OBSERVE` inmediatamente anterior.
 
-## ActionOption
+### ActionOption
 
-Cada opción debe contener suficiente semántica para que MSPA pueda valorarla:
-
+Debe contener:
 - `ActionTypeId`
 - `ActionInstanceId`
 - `ActionContinuityKey`
 - actor
 - objetivo(s)
-- Predicate Schema o semántica registrada
+- semántica registrada
 - efectos esperados
 - costes
 - riesgos
 - tags
 - consideraciones registradas
-- restricciones ya resueltas por el host
-- metadatos de progreso si representa una acción en curso
-
-### Identidad estable
-
-`ActionInstanceId` puede ser efímero.
+- restricciones físicas ya resueltas por el host
+- progreso opcional.
 
 `ActionContinuityKey` debe permanecer estable mientras la opción represente la misma actividad lógica.
 
-Ejemplo:
+### Decision
 
-> “seguir construyendo la misma casa” debe conservar continuidad aunque el host regenere la lista de opciones cada ciclo.
-
-## Salida conceptual
-
-`Decision`:
-
+Puede contener:
 - `selected_action`
 - `selected_target`
 - `confidence`
@@ -117,93 +88,53 @@ Ejemplo:
 - `expressed_emotion`
 - `outgoing_statements[]`
 - `continuity_expectation`
-- `explanation`
+- `explanation`.
 
-MSPA sólo puede seleccionar entre las acciones ofrecidas por el host.
+MSPA sólo selecciona entre acciones ofrecidas por el host.
 
----
-
-# 4. REPORT
-
-## Entrada conceptual
+## 4. REPORT
 
 `REPORT(agent, action_result, time)`
 
 `ActionResult` puede incluir:
-
 - acción intentada;
 - continuidad asociada;
-- éxito / fracaso / parcial;
+- éxito, fracaso o resultado parcial;
 - resultado observable;
-- OutcomeTags;
+- `OutcomeTags`;
 - consecuencias inesperadas;
 - terceros afectados;
 - motivo de interrupción;
 - costes reales;
-- cambios de recursos;
 - proposiciones resultantes.
 
-## Efectos lógicos
+MSPA puede usar el reporte para actualizar metas, emociones, expectativas, aprendizaje, relaciones, memoria y creencias.
 
-MSPA puede usar el reporte para:
-
-- cerrar o modificar metas;
-- actualizar emociones;
-- reforzar o debilitar expectativas;
-- registrar aprendizaje causal;
-- modificar relaciones;
-- formar memoria;
-- generar nuevas creencias.
-
----
-
-# 5. ADVANCE_TO
+## 5. ADVANCE_TO
 
 `ADVANCE_TO(agent, target_time)`
 
-No es un tick obligatorio.
+No es un tick obligatorio. Sirve para materializar efectos temporales diferidos, caducar metas y detectar si el paso del tiempo recomienda una nueva decisión.
 
-Su uso principal es:
+## 6. EXPORT / IMPORT
 
-- actualizar agentes dormidos;
-- caducar metas;
-- resolver hitos temporales;
-- materializar efectos perezosos cuando sea necesario;
-- informar al host si el paso del tiempo por sí solo recomienda una nueva decisión.
+`EXPORT` produce un `AgentPsychState` portable y versionado.
 
-Todas las demás operaciones ya transportan timestamps, por lo que un host puede usar `ADVANCE_TO` sólo cuando lo necesite.
+`IMPORT` valida:
+1. versión;
+2. estructura;
+3. namespaces y packs;
+4. límites de tamaño y complejidad;
+5. referencias;
+6. datos opacos preservables;
+7. ausencia de contenido no autorizado.
 
----
+La autenticación pertenece al host. La seguridad estructural del estado pertenece a MSPA.
 
-# 6. EXPORT / IMPORT
+## 7. AgentPsychState
 
-## EXPORT
-
-Produce un `AgentPsychState` portable y versionado.
-
-Debe incluir todo lo necesario para reconstruir el agente psicológico sin depender de punteros, memoria local o IDs efímeros del runtime.
-
-## IMPORT
-
-Importa un estado después de:
-
-1. validar versión;
-2. validar estructura;
-3. validar namespaces y packs;
-4. validar límites de tamaño/complejidad;
-5. resolver referencias conocidas;
-6. preservar referencias externas desconocidas;
-7. rechazar reglas o datos no autorizados.
-
-La autenticación del jugador/servidor pertenece al host. La seguridad estructural del estado pertenece a MSPA.
-
----
-
-# 7. AgentPsychState
-
-Conceptualmente debe poder contener:
-
-- identidad psicológica del agente;
+Puede contener:
+- identidad psicológica;
 - personalidad;
 - valores;
 - metas;
@@ -214,232 +145,134 @@ Conceptualmente debe poder contener:
 - memorias;
 - expectativas aprendidas;
 - referencias externas;
-- RNG/seed o información suficiente para reproducibilidad;
-- versión de estado;
-- packs y namespaces requeridos.
+- estado RNG suficiente para reproducibilidad;
+- versión;
+- namespaces requeridos.
 
-No se fija todavía formato de serialización.
-
----
-
-# 8. Proposition
+## 8. Proposition
 
 Una proposición contiene:
-
 - `PredicateId`
 - roles y argumentos
 - polaridad
 - tiempo/intervalo
 - calificadores
 - namespace
-- procedencia
+- procedencia.
 
-MSPA debe poder comparar proposiciones al menos para detectar:
+MSPA debe poder detectar igualdad semántica básica, contradicción, compatibilidad y relaciones de evidencia declaradas.
 
-- igualdad semántica básica;
-- contradicción;
-- compatibilidad;
-- relación de evidencia cuando una regla lo declara.
+## 9. Predicate Schema
 
----
-
-# 9. Predicate Schema
-
-Todo predicado de dominio que MSPA deba interpretar debe estar registrado.
-
-El esquema declara:
-
+Todo predicado interpretable debe registrar:
 - roles válidos;
 - rol agente;
 - posibles objetivos;
 - categorías de efecto;
-- información de intencionalidad;
+- intencionalidad;
 - relevancias posibles;
 - tags de aprendizaje;
 - pistas de appraisal;
-- mapeos opcionales hacia vocabulario base MSPA.
+- mapeos opcionales al vocabulario base.
 
-Un predicado desconocido puede conservarse como dato opaco, pero no puede recibir interpretación psicológica rica sin esquema.
+Un predicado desconocido puede conservarse como dato opaco.
 
----
+## 10. Reglas de inferencia
 
-# 10. Reglas de inferencia
+Las reglas son datos declarativos, serializables y versionables. No ejecutan código arbitrario.
 
-Las reglas son datos declarativos.
-
-Deben poder serializarse/versionarse y no pueden ejecutar código arbitrario.
-
-El runtime debe imponer:
-
+El runtime impone:
 - profundidad máxima;
-- número máximo de reglas por estímulo;
-- máximo de hipótesis nuevas;
-- presupuesto temporal o lógico;
+- máximo de reglas por estímulo;
+- máximo de hipótesis;
+- presupuesto lógico;
 - terminación garantizada.
 
-Las reglas pueden producir hipótesis con una certeza base que luego se combina con la calidad de la evidencia y los sesgos del agente.
+Las reglas producen hipótesis con certeza base combinada después con evidencia y sesgos del agente.
 
----
+## 11. Consideraciones de utilidad
 
-# 11. Consideraciones de utilidad
+Cada tipo de acción declara sólo consideraciones relevantes. Cada consideración transforma una entrada normalizada mediante una curva serializable.
 
-Cada tipo de acción declara sólo las consideraciones relevantes.
-
-Cada consideración obtiene una entrada normalizada y la transforma mediante una curva serializable, preferiblemente lineal por tramos.
-
-Una implementación debe distinguir:
-
+Se distinguen:
 - contribuciones de utilidad;
-- factores de penalización fuerte;
+- penalizaciones/condicionantes;
 - restricciones físicas ya eliminadas por el host.
 
-No se fija todavía una única fórmula final de combinación; el sandbox debe comparar alternativas y verificar estabilidad.
+La fórmula final se valida mediante conformidad antes de congelarse.
 
----
+## 12. Histéresis
 
-# 12. Histéresis
+La continuidad se reconoce mediante `ActionContinuityKey` y puede considerar progreso, coste de interrupción, persistencia de meta, compromiso y urgencia nueva.
 
-La decisión debe poder reconocer una acción actual mediante `ActionContinuityKey`.
+Si el host no proporciona continuidad estable, MSPA no garantiza histéresis robusta.
 
-La continuidad puede considerar:
+## 13. Batch
 
-- progreso;
-- coste de interrupción;
-- persistencia de meta;
-- compromiso;
-- urgencia nueva.
-
-Un host que no proporcione continuidad estable acepta una degradación explícita: MSPA no puede garantizar histéresis robusta.
-
----
-
-# 13. Batch API conceptual
-
-Toda operación individual debe admitir una forma batch equivalente:
-
-- `OBSERVE_BATCH`
-- `DECIDE_BATCH`
-- `REPORT_BATCH`
-- `ADVANCE_BATCH`
-
-No se fija todavía nombre real de API.
+Toda operación individual puede tener forma batch equivalente.
 
 Garantía:
 
-> procesar un batch debe ser semánticamente equivalente a procesar sus agentes individualmente en orden canónico.
+> Procesar un batch debe ser semánticamente equivalente a procesar sus agentes individualmente en orden canónico.
 
-El orden canónico debe estar definido por referencias estables, no por hash maps ni por orden de threads.
+El orden canónico usa referencias estables y no depende del scheduling de threads ni del orden de hash tables.
 
----
+## 14. Determinismo
 
-# 14. Determinismo
-
-Cada agente debe disponer de un stream pseudoaleatorio independiente o derivable de forma estable.
-
-Agregar un agente nuevo no debe alterar la secuencia aleatoria de los demás.
+Cada agente dispone de un stream pseudoaleatorio independiente o derivable de forma estable.
 
 No se permite depender de:
-
 - orden de iteración no especificado;
 - scheduling de threads;
 - RNG global compartido;
-- funciones matemáticas cuya variación multiplataforma comprometa la suite de conformidad sin una política explícita.
+- comportamiento matemático no definido por la política de conformidad.
 
----
+## 15. Tiempo
 
-# 15. Tiempo
+Toda llamada relevante lleva timestamp lógico entero. Los decaimientos deben poder evaluarse perezosamente.
 
-Toda llamada relevante lleva timestamp lógico.
+## 16. Aprendizaje causal inicial
 
-Los decaimientos deben poder evaluarse perezosamente.
-
-Una implementación no debe requerir actualizar todos los agentes cada frame para mantener coherencia.
-
----
-
-# 16. Aprendizaje causal inicial
-
-La primera versión usa patrones acotados:
+Primera versión:
 
 ```text
 ActionType + ContextTags -> OutcomeTags
 ```
 
-Cada patrón conserva contadores/estadísticas limitadas.
+Cada patrón conserva estadísticas limitadas. El Domain Pack controla qué tags son válidos para evitar explosión combinatoria.
 
-El Domain Pack controla qué ContextTags son relevantes para evitar explosión combinatoria.
+## 17. Entrada no confiable
 
-Los límites máximos de patrones por agente forman parte de la configuración de seguridad/rendimiento.
+Estados y packs externos se tratan como datos hostiles. Se imponen cuotas a tamaño total, creencias, memorias, metas, relaciones, reglas, profundidad de proposiciones, strings, patrones de aprendizaje y derivaciones máximas.
 
----
+## 18. Compatibilidad de packs
 
-# 17. Entrada no confiable
+Cada pack declara `pack_id`, versión, namespace, dependencias, compatibilidad, vocabulario, schemas, reglas y curvas.
 
-Los estados y packs externos deben tratarse como datos hostiles.
+Conceptos desconocidos pueden permanecer opacos y referencias externas pueden mantenerse sin resolución local.
 
-El runtime debe imponer cuotas a:
+## 19. Degradación
 
-- tamaño total;
-- número de creencias;
-- memorias;
-- metas;
-- relaciones;
-- reglas;
-- profundidad de proposiciones;
-- longitud de strings;
-- patrones de aprendizaje;
-- derivaciones máximas.
-
-No basta con validar sintaxis.
-
----
-
-# 18. Compatibilidad de packs
-
-Cada pack declara:
-
-- `pack_id`
-- versión
-- namespace
-- dependencias
-- compatibilidad
-- vocabulario
-- schemas
-- reglas
-- curvas
-- límites
-
-Durante importación, conceptos desconocidos pueden permanecer opacos y referencias externas pueden seguir colgantes.
-
----
-
-# 19. Reglas de degradación
-
-El comportamiento debe ser definido cuando módulos opcionales estén apagados.
-
-Ejemplos:
-
+Debe existir comportamiento definido cuando módulos opcionales estén desactivados:
 - sin inferencia: sólo percepción/testimonio directo;
 - sin memoria: no hay reactivación episódica;
 - sin aprendizaje: no se actualizan expectativas causales;
-- sin expresión: `expressed_emotion` y `outgoing_statements` pueden quedar vacíos;
+- sin expresión: no se produce salida expresiva;
 - sin relaciones: appraisal social usa valores neutrales configurables;
 - sin ánimo: emociones operan directamente.
 
----
+## 20. Conformidad
 
-# 20. Escenarios de conformidad
+El contrato no se congela hasta validar, con escenarios abstractos y neutrales:
+- divergencia de creencias;
+- evidencia contradictoria;
+- reapreciación;
+- influencia externa;
+- referencias no resolubles;
+- continuidad/histéresis;
+- batch vs individual;
+- determinismo;
+- estado hostil;
+- aprendizaje causal simple.
 
-Este contrato no se congela hasta expresar y ejecutar como datos:
-
-1. Mara;
-2. inspiración;
-3. viajero entre mundos;
-4. histéresis;
-5. batch vs individual;
-6. determinismo;
-7. estado hostil;
-8. aprendizaje causal simple;
-9. contacto cultural sin regla especial.
-
-La suite de escenarios debe sobrevivir al reemplazo del sandbox por la implementación de producción.
+La suite de conformidad no contiene personajes, juegos, lugares ni reglas de proyectos consumidores.
