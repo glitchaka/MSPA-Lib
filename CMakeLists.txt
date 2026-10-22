@@ -9,7 +9,15 @@ add_library(mspa STATIC
     src/base/time.cpp
     src/semantics/registry.cpp
     src/psychology/engine.cpp
+    src/psychology/beliefs.cpp
+    src/psychology/appraisal.cpp
+    src/psychology/emotions.cpp
+    src/psychology/goals.cpp
+    src/psychology/memory.cpp
+    src/psychology/relationships.cpp
+    src/psychology/learning.cpp
     src/decision/decision.cpp
+    src/decision/hysteresis.cpp
     src/runtime/agent_store.cpp
     src/runtime/runtime.cpp
     src/persistence/state_transfer.cpp
