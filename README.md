@@ -5,7 +5,7 @@
 
 MSPA-Lib es una librería para dotar agentes autónomos de personalidad, valores, metas, creencias subjetivas, emociones, ánimo, memoria, relaciones, aprendizaje y preferencias de acción explicables.
 
-> Estado actual: **arquitectura lógica v2.4 + arquitectura de código v0.1 + contrato de interacción v0.2**.
+> Estado actual: **arquitectura lógica v2.4 + arquitectura de código v0.1 + contrato de interacción v0.2 + implementación inicial de `base` en C++17**.
 
 MSPA es completamente agnóstico al host. No contiene lógica, nombres, clases, eventos, escenarios ni reglas de proyectos consumidores. Los hosts externos reciben los contratos/conectores públicos y realizan fuera de este repositorio el mapeo de sus entidades, eventos, acciones y conceptos.
 
@@ -26,6 +26,7 @@ MSPA aprende / actualiza
 Además:
 - `CREATE_AGENT / REMOVE_AGENT / HAS_AGENT` gestionan ciclo de vida;
 - todas las operaciones relevantes usan `PsychTime` entero de 64 bits;
+- `process_time` y `event_time` son conceptos distintos;
 - `ADVANCE_TO` sirve para actualización temporal diferida;
 - `EXPORT_AGENT / IMPORT_AGENT` permiten persistencia y traslado de estado;
 - existen operaciones batch con orden canónico y determinismo equivalente al procesamiento individual;
@@ -52,15 +53,36 @@ Además:
 
 - **Producción:** C++17 nativo.
 - **Bindings:** fachada C opcional.
+- **Identidad:** `AgentId = WorldId + local_id`.
 - **Errores C++:** `Result<T>`; excepciones no atraviesan API pública.
 - **Errores C:** `mspa_status` + parámetros de salida.
-- **Tiempo contractual:** ticks lógicos enteros de 64 bits.
-- **RNG:** independiente por agente.
-- **Batch:** snapshot semántico inmutable durante la operación; mutaciones se publican entre batches.
+- **Tiempo contractual:** ticks lógicos enteros de 64 bits y escala racional por runtime.
+- **RNG:** independiente por agente; rekey por defecto al trasladar entre runtimes.
+- **Batch:** snapshot semántico inmutable durante la operación; orden `(AgentId, input_sequence)`; mutaciones se publican entre batches.
 - **Curvas configurables:** lineales por tramos como formato inicial.
 - **Compilación determinista recomendada:** MSVC `/fp:strict`; GCC/Clang sin `-ffast-math` y con contracción FP desactivada cuando sea relevante.
 
-No están congelados todavía el formato físico de serialización, el sistema de build definitivo, el modelo de threading interno, la representación numérica para garantía bit-a-bit multiplataforma ni el layout exacto de la ABI C.
+No están congelados todavía el formato físico de serialización, el modelo de threading interno, la representación numérica para garantía bit-a-bit multiplataforma ni el layout exacto de la ABI C.
+
+## Implementación actual
+
+El primer bloque ejecutable vive en:
+
+```text
+include/mspa/base/
+src/base/
+tests/base_tests.cpp
+```
+
+Actualmente cubre:
+- IDs fuertes;
+- `AgentId` compuesto;
+- `PsychTime`, `TimeScale` y `TimeDomain`;
+- `ImportTimePolicy`;
+- `ErrorCode` y `Result<T>`;
+- RNG determinista por agente y `RngImportPolicy`;
+- build CMake C++17;
+- primer test unitario/conformidad de `base`.
 
 ## Documentación vigente
 
