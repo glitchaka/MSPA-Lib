@@ -3,6 +3,7 @@
 #include <cstdint>
 
 #include "mspa/base/ids.hpp"
+#include "mspa/base/result.hpp"
 
 namespace mspa {
 
@@ -13,29 +14,12 @@ public:
 
     [[nodiscard]] constexpr std::uint64_t ticks() const noexcept { return ticks_; }
 
-    friend constexpr bool operator==(PsychTime lhs, PsychTime rhs) noexcept {
-        return lhs.ticks_ == rhs.ticks_;
-    }
-
-    friend constexpr bool operator!=(PsychTime lhs, PsychTime rhs) noexcept {
-        return !(lhs == rhs);
-    }
-
-    friend constexpr bool operator<(PsychTime lhs, PsychTime rhs) noexcept {
-        return lhs.ticks_ < rhs.ticks_;
-    }
-
-    friend constexpr bool operator<=(PsychTime lhs, PsychTime rhs) noexcept {
-        return lhs.ticks_ <= rhs.ticks_;
-    }
-
-    friend constexpr bool operator>(PsychTime lhs, PsychTime rhs) noexcept {
-        return rhs < lhs;
-    }
-
-    friend constexpr bool operator>=(PsychTime lhs, PsychTime rhs) noexcept {
-        return rhs <= lhs;
-    }
+    friend constexpr bool operator==(PsychTime lhs, PsychTime rhs) noexcept { return lhs.ticks_ == rhs.ticks_; }
+    friend constexpr bool operator!=(PsychTime lhs, PsychTime rhs) noexcept { return !(lhs == rhs); }
+    friend constexpr bool operator<(PsychTime lhs, PsychTime rhs) noexcept { return lhs.ticks_ < rhs.ticks_; }
+    friend constexpr bool operator<=(PsychTime lhs, PsychTime rhs) noexcept { return lhs.ticks_ <= rhs.ticks_; }
+    friend constexpr bool operator>(PsychTime lhs, PsychTime rhs) noexcept { return rhs < lhs; }
+    friend constexpr bool operator>=(PsychTime lhs, PsychTime rhs) noexcept { return rhs <= lhs; }
 
 private:
     std::uint64_t ticks_{};
@@ -70,5 +54,7 @@ struct StimulusTime {
     bool has_event_time{false};
     PsychTime event_time{};
 };
+
+Result<PsychTime> convert_time_delta(PsychTime delta, TimeScale source, TimeScale destination);
 
 } // namespace mspa
