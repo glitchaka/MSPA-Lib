@@ -5,9 +5,9 @@
 
 MSPA-Lib es una librería para dotar agentes autónomos de personalidad, valores, metas, creencias subjetivas, emociones, ánimo, memoria, relaciones, aprendizaje y preferencias de acción explicables.
 
-> Estado actual: **arquitectura lógica v2.4 + planificación de arquitectura de código v0.1**. La documentación vigente es completamente agnóstica al host.
+> Estado actual: **arquitectura lógica v2.4 + arquitectura de código v0.2 + contrato de interacción v0.3**.
 
-MSPA no contiene lógica, nombres, clases, eventos, escenarios ni reglas de proyectos consumidores. Los hosts externos reciben los contratos y conectores públicos y realizan fuera de este repositorio el mapeo de sus propias entidades, eventos, acciones y conceptos.
+MSPA es completamente agnóstico al host. No contiene lógica, nombres, clases, eventos, escenarios ni reglas de proyectos consumidores. Los hosts externos reciben los contratos/conectores públicos y realizan fuera de este repositorio el mapeo de sus entidades, eventos, acciones y conceptos.
 
 ## Contrato conceptual
 
@@ -24,10 +24,12 @@ MSPA aprende / actualiza
 ```
 
 Además:
-- todas las operaciones relevantes llevan tiempo lógico entero;
+- `CREATE_AGENT / REMOVE_AGENT / HAS_AGENT` gestionan ciclo de vida;
+- todas las operaciones relevantes usan `PsychTime` entero de 64 bits;
 - `ADVANCE_TO` sirve para actualización temporal diferida;
-- `EXPORT / IMPORT` permite persistencia y traslado de estado;
-- existen operaciones batch con orden canónico y determinismo equivalente al procesamiento individual.
+- `EXPORT_AGENT / IMPORT_AGENT` permiten persistencia y traslado de estado;
+- existen operaciones batch con orden canónico y determinismo equivalente al procesamiento individual;
+- varias instancias `Runtime` pueden coexistir en el mismo proceso sin estado mutable global compartido.
 
 ## Principios
 
@@ -46,22 +48,26 @@ Además:
 - El runtime debe ser explicable, reproducible y portable.
 - Los Domain Packs concretos pertenecen a proyectos consumidores externos.
 
-## Candidatos técnicos
+## Decisiones técnicas actuales
 
-- **Producción:** C++ nativo.
+- **Producción:** C++17 nativo.
 - **Bindings:** fachada C opcional.
+- **Errores C++:** `Result<T>`; excepciones no atraviesan API pública.
+- **Errores C:** `mspa_status` + parámetros de salida.
 - **Tiempo contractual:** ticks lógicos enteros de 64 bits.
 - **RNG:** independiente por agente.
-- **Curvas configurables:** lineales por tramos como candidato inicial.
+- **Batch:** snapshot semántico inmutable durante la operación; mutaciones se publican entre batches.
+- **Curvas configurables:** lineales por tramos como formato inicial.
+- **Compilación determinista recomendada:** MSVC `/fp:strict`; GCC/Clang sin `-ffast-math` y con contracción FP desactivada cuando sea relevante.
 
-No están congelados todavía ABI, serialización, build system, threading model ni formato físico de Domain Packs.
+No están congelados todavía el formato físico de serialización, el sistema de build definitivo, el modelo de threading interno, la representación numérica para garantía bit-a-bit multiplataforma ni el layout exacto de la ABI C.
 
 ## Documentación vigente
 
 - [`docs/MSPA-SPEC-v2.4.md`](docs/MSPA-SPEC-v2.4.md) — especificación lógica actual.
-- [`docs/MSPA-INTERACTION-CONTRACT-v0.2.md`](docs/MSPA-INTERACTION-CONTRACT-v0.2.md) — contrato de interacción.
+- [`docs/MSPA-INTERACTION-CONTRACT-v0.3.md`](docs/MSPA-INTERACTION-CONTRACT-v0.3.md) — contrato de interacción vigente.
 - [`docs/MSPA-DOMAIN-PACK-CONTRACT-v0.1.md`](docs/MSPA-DOMAIN-PACK-CONTRACT-v0.1.md) — contrato de Domain Packs externos.
-- [`docs/MSPA-CODE-ARCHITECTURE-v0.1.md`](docs/MSPA-CODE-ARCHITECTURE-v0.1.md) — planificación de arquitectura de código.
+- [`docs/MSPA-CODE-ARCHITECTURE-v0.2.md`](docs/MSPA-CODE-ARCHITECTURE-v0.2.md) — arquitectura de código vigente.
 
 ## Invariante de separación
 
