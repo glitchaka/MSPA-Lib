@@ -20,7 +20,7 @@ struct Personality {
 };
 
 struct ValueEntry {
-    ConceptId concept{};
+    ConceptId concept_id{};
     float intensity{0.0f};
 };
 
@@ -46,7 +46,7 @@ struct MoodState {
 
 struct GoalState {
     GoalId id{};
-    ConceptId concept{};
+    ConceptId concept_id{};
     float priority{0.0f};
     bool active{true};
 };
