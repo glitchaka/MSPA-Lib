@@ -7,7 +7,7 @@ namespace mspa {
 
 class GoalSystem {
 public:
-    Result<GoalId> add(AgentPsychState& agent, ConceptId concept, float priority) const;
+    Result<GoalId> add(AgentPsychState& agent, ConceptId concept_id, float priority) const;
     Result<void> complete(AgentPsychState& agent, GoalId goal) const;
 };
 
