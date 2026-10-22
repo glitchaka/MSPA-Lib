@@ -5,7 +5,7 @@
 
 MSPA-Lib es una librería para dotar agentes autónomos de personalidad, valores, metas, creencias subjetivas, emociones, ánimo, memoria, relaciones, aprendizaje y preferencias de acción explicables.
 
-> Estado actual: **arquitectura lógica v2.4 + arquitectura de código v0.2 + contrato de interacción v0.3**.
+> Estado actual: **arquitectura lógica v2.4 + arquitectura de código v0.1 + contrato de interacción v0.2**.
 
 MSPA es completamente agnóstico al host. No contiene lógica, nombres, clases, eventos, escenarios ni reglas de proyectos consumidores. Los hosts externos reciben los contratos/conectores públicos y realizan fuera de este repositorio el mapeo de sus entidades, eventos, acciones y conceptos.
 
@@ -65,9 +65,9 @@ No están congelados todavía el formato físico de serialización, el sistema d
 ## Documentación vigente
 
 - [`docs/MSPA-SPEC-v2.4.md`](docs/MSPA-SPEC-v2.4.md) — especificación lógica actual.
-- [`docs/MSPA-INTERACTION-CONTRACT-v0.3.md`](docs/MSPA-INTERACTION-CONTRACT-v0.3.md) — contrato de interacción vigente.
+- [`docs/MSPA-INTERACTION-CONTRACT-v0.2.md`](docs/MSPA-INTERACTION-CONTRACT-v0.2.md) — contrato de interacción vigente y corregido en sitio.
 - [`docs/MSPA-DOMAIN-PACK-CONTRACT-v0.1.md`](docs/MSPA-DOMAIN-PACK-CONTRACT-v0.1.md) — contrato de Domain Packs externos.
-- [`docs/MSPA-CODE-ARCHITECTURE-v0.2.md`](docs/MSPA-CODE-ARCHITECTURE-v0.2.md) — arquitectura de código vigente.
+- [`docs/MSPA-CODE-ARCHITECTURE-v0.1.md`](docs/MSPA-CODE-ARCHITECTURE-v0.1.md) — arquitectura de código vigente y corregida en sitio.
 
 ## Invariante de separación
 
