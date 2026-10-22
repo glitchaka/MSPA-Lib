@@ -2,65 +2,57 @@
 
 ## Estado
 
-**Arquitectura candidata. No congelada. No existe implementación de producción.**
+**Arquitectura candidata, completamente agnóstica al host.**
 
-MSPA es un **Motor de Simulación Psicológica y Cultural de Agentes** pensado como middleware desacoplado del juego. Su trabajo es interpretar estímulos desde la perspectiva subjetiva de un agente, mantener su estado psicológico y devolver preferencias de conducta explicables. El host conserva la autoridad sobre el mundo, la percepción física, las acciones realmente disponibles y su ejecución.
+MSPA es un motor de simulación psicológica y cultural de agentes. Interpreta estímulos desde la perspectiva subjetiva de un agente, mantiene estado psicológico y devuelve preferencias de conducta explicables.
 
-La v2.4 corrige y formaliza los puntos que seguían ambiguos en v2.3: identidad estable de acciones, retorno de urgencia tras observación, evaluación temporal perezosa, llamadas por lotes deterministas, semántica explícita de Domain Packs, lenguaje de inferencia acotado, seguridad frente a estados externos no confiables y una primera versión deliberadamente simple del aprendizaje causal.
+El host conserva autoridad sobre el mundo, percepción física, entidades reales, acciones disponibles y ejecución.
+
+Este documento no contiene personajes, juegos, repositorios, lugares, eventos ni reglas de proyectos consumidores.
 
 ---
 
-# 1. Principio fundamental
+## 1. Contrato fundamental
 
 ```text
-HOST / MUNDO
-    ↓
-OBSERVE
-    ↓
-MSPA actualiza al agente
-    ↓
-DECIDE
-    ↓
-MSPA elige entre opciones ofrecidas por el host
-    ↓
+HOST
+  ↓ OBSERVE
+MSPA actualiza estado subjetivo
+  ↓ DECIDE
+MSPA selecciona entre opciones ofrecidas
+  ↓
 HOST ejecuta
-    ↓
-REPORT
-    ↓
+  ↓ REPORT
 MSPA aprende y reevalúa
 ```
 
 Además:
-
-- todas las operaciones relevantes llevan tiempo lógico;
-- `ADVANCE_TO` permite actualizar explícitamente agentes dormidos o procesar hitos temporales;
-- `EXPORT / IMPORT` mueve o persiste estados psicológicos;
-- las operaciones batch son semánticamente equivalentes a procesar agentes en orden canónico.
+- todas las operaciones relevantes usan tiempo lógico explícito;
+- `ADVANCE_TO` materializa efectos temporales diferidos;
+- `EXPORT / IMPORT` permite persistencia y traslado de estado;
+- las operaciones batch son equivalentes al procesamiento individual en orden canónico.
 
 > **MSPA procesa significado psicológico; el host controla realidad y ejecución.**
 
 ---
 
-# 2. Frontera host / MSPA
+## 2. Frontera host / MSPA
 
-## El host decide
-
+### El host decide
 - qué existe;
 - qué ocurrió realmente;
-- qué puede percibir cada agente;
+- qué pudo percibirse;
 - qué acciones son físicamente posibles;
 - pathfinding, animación, inventario, combate, navegación, recursos y física;
-- qué conceptos y predicados de dominio existen;
-- qué reglas de inferencia específicas del dominio se registran;
+- qué semántica de dominio registra;
 - qué resultado real produjo una acción.
 
-## MSPA decide
-
-- qué atención presta el agente a un estímulo;
+### MSPA decide
+- qué atención presta el agente;
 - qué proposiciones y creencias mantiene;
 - cómo cambia su certeza;
 - qué hipótesis infiere mediante reglas declarativas;
-- cómo evalúa subjetivamente un evento;
+- cómo evalúa subjetivamente lo percibido;
 - qué emociones aparecen;
 - cómo cambian metas, ánimo, relaciones y memoria;
 - qué espera que ocurra;
@@ -70,13 +62,11 @@ Además:
 
 ---
 
-# 3. Identidad y espacios de nombres
+## 3. Identidad y namespaces
 
-Los identificadores deben ser opacos al núcleo pero portables entre mundos.
-
-Se distinguen conceptualmente:
-
-- `WorldId` / `NamespaceId`
+Identificadores conceptuales:
+- `WorldId`
+- `NamespaceId`
 - `AgentId`
 - `EntityId`
 - `EventId`
@@ -90,368 +80,187 @@ Se distinguen conceptualmente:
 - `ConceptId`
 - `PackId`
 
-Una referencia portable debe poder distinguir, por ejemplo:
-
-```text
-world-a:agent-27
-world-b:agent-27
-```
-
-Las referencias externas pueden permanecer colgantes sin ser eliminadas. Un agente que migra de mundo puede recordar entidades o lugares que el nuevo host no puede resolver.
+Los IDs son opacos para el core. Las referencias externas pueden preservarse aunque no sean resolubles localmente.
 
 ---
 
-# 4. Acción: tipo, instancia y continuidad
-
-La histéresis requiere reconocer que una opción nueva representa la continuación de una actividad ya iniciada.
+## 4. Acción y continuidad
 
 MSPA distingue:
+- **tipo de acción:** clase semántica;
+- **instancia de acción:** ejecución concreta;
+- **clave de continuidad:** identidad estable mientras continúa una misma actividad lógica.
 
-## 4.1 Tipo de acción
-
-Describe la clase semántica de conducta.
-
-Ejemplos:
-
-```text
-mspa:communicate
-mspa:avoid
-isla:harvest
-```
-
-## 4.2 Instancia de acción
-
-Describe una ejecución concreta.
-
-Ejemplo:
-
-> hablar con Mara en este encuentro.
-
-## 4.3 Clave de continuidad
-
-La proporciona el host y debe mantenerse estable mientras una misma actividad lógica continúe, aunque el host regenere la lista de opciones en cada consulta.
-
-MSPA usa esta clave para calcular:
-
-- progreso ya realizado;
-- coste de interrupción;
-- compromiso con la acción actual;
-- histéresis;
-- persistencia de meta.
-
-Un `ActionId` efímero no puede usarse como única identidad de continuidad.
+La histéresis depende de la clave de continuidad, progreso, coste de interrupción y estado psicológico, no de IDs efímeros.
 
 ---
 
-# 5. Personalidad
+## 5. Personalidad
 
-Se mantienen seis ejes base:
+Seis ejes base:
 
 | Eje | Bajo | Alto | Función |
 |---|---|---|---|
-| Sociabilidad | reservado | sociable | valor subjetivo de interacción |
+| Sociabilidad | reservado | sociable | peso de interacción |
 | Estabilidad | reactivo | sereno | intensidad y recuperación emocional |
 | Empatía | egocéntrico | empático | relevancia del estado ajeno |
-| Persistencia | flexible | obstinado | continuidad de metas y resistencia al abandono |
-| Curiosidad | tradicional | curioso | tolerancia a incertidumbre y exploración |
+| Persistencia | flexible | obstinado | continuidad de metas |
+| Curiosidad | tradicional | curioso | tolerancia a incertidumbre/exploración |
 | Audacia | prudente | temerario | peso subjetivo del riesgo |
 
-Persistencia **no controla directamente** todos los fenómenos de rigidez. Se derivan magnitudes distintas:
+La personalidad modifica sensibilidades y pesos. No aplica bonificaciones directas a acciones.
 
-- persistencia de meta: principalmente Persistencia + Estabilidad + inversión previa;
-- rigidez de creencia: Persistencia − Curiosidad + carga emocional + coherencia identitaria;
-- resistencia a cambiar de acción: Persistencia + progreso + coste de interrupción.
-
-Así se evita convertir “obstinado” en una propiedad universal.
+Magnitudes derivadas como rigidez de creencia o resistencia a abandonar una acción combinan varios factores y no dependen de un único eje.
 
 ---
 
-# 6. Valores
+## 6. Valores
 
-Los valores expresan qué considera importante un agente. El catálogo pertenece al Core Pack o al Domain Pack.
+Los valores expresan qué considera importante un agente.
 
 Cada valor tiene al menos:
-
-- identificador;
+- `ConceptId`;
 - intensidad;
-- posibles relaciones de conflicto;
+- posibles conflictos;
 - etiquetas semánticas opcionales.
 
-La personalidad describe **cómo** tiende a reaccionar; los valores describen **qué** le importa.
+Los catálogos concretos pertenecen a datos externos.
 
 ---
 
-# 7. Necesidades y estados internos
+## 7. Necesidades y estados internos
 
-Las necesidades pertenecen principalmente al host y se entregan a MSPA como estímulos o estado consultable.
+Las necesidades pertenecen principalmente al host y llegan como estímulos o estado consultable.
 
-Una necesidad no es una emoción.
-
-Puede convertirse en motivador, meta o factor de appraisal.
+Una necesidad no es una emoción. Puede convertirse en motivador, meta o factor de appraisal.
 
 ---
 
-# 8. Metas
+## 8. Metas
 
-Cada meta contiene conceptualmente:
-
+Cada meta contiene:
 - origen;
 - condición objetivo;
 - prioridad;
 - estado;
 - condición de cierre;
-- timestamp de creación;
-- posible fecha límite;
+- creación;
+- posible deadline;
 - posibilidad de suspensión.
 
-Orígenes posibles:
+Orígenes posibles: necesidad, valor, compromiso, evento, creencia, relación, regulación emocional o influencia externa.
 
-- necesidad;
-- valor;
-- compromiso;
-- evento;
-- creencia;
-- relación;
-- regulación emocional;
-- inspiración o influencia.
-
-Se favorecen pocas metas dominantes simultáneas. El resto puede quedar suspendido o latente.
+Sólo unas pocas metas deben dominar simultáneamente.
 
 ---
 
-# 9. Proposiciones
+## 9. Proposiciones
 
-Toda creencia se expresa mediante una proposición estructurada.
-
-Una proposición contiene conceptualmente:
-
+Toda creencia se expresa mediante una proposición estructurada:
 - `PredicateId`;
-- argumentos con roles;
+- argumentos por rol;
 - polaridad;
-- tiempo o intervalo;
-- modificadores semánticos;
+- tiempo/intervalo;
+- calificadores;
 - namespace;
 - procedencia.
 
-Ejemplo:
-
-```text
-predicate: mspa:present_at
-roles:
-  actor: Torvando
-  location: Casa_Mara
-  event: Incendio_17
-polarity: true
-```
-
-Otro ejemplo:
-
-```text
-predicate: mspa:failed_to_help
-roles:
-  actor: Torvando
-  target: Mara
-  event: Incendio_17
-intentionality: unknown
-```
+El formato es genérico y no contiene semántica de un proyecto concreto.
 
 ---
 
-# 10. Vocabulario base MSPA
+## 10. Vocabulario base
 
-Para permitir intercambio entre juegos y mundos, MSPA define un vocabulario semántico mínimo compartido.
+MSPA define un vocabulario mínimo de relaciones psicológica y socialmente generales: presencia, causalidad, ayuda, daño, amenaza, prevención, posesión, pertenencia, promesa, aprobación, expectativa, deseo, permiso, prohibición, comunicación y observación.
 
-La lista exacta se validará en sandbox, pero debe cubrir relaciones cognitivamente generales como:
-
-- presencia;
-- causalidad;
-- ayuda;
-- daño;
-- amenaza;
-- prevención;
-- fallo de prevención;
-- posesión;
-- pertenencia;
-- promesa;
-- aprobación/desaprobación;
-- expectativa;
-- deseo;
-- permiso/prohibición;
-- comunicación;
-- observación.
-
-Los juegos extienden este vocabulario mediante namespaces propios.
-
-Ejemplo:
-
-```text
-mspa:helped
-isla:harvested
-rpg:cast_spell
-```
+Los hosts extienden el vocabulario mediante namespaces externos.
 
 ---
 
-# 11. Predicate Schema
+## 11. Predicate Schema
 
-Un predicado de dominio no es sólo un nombre. El Domain Pack debe declarar su semántica mínima.
-
-Un esquema puede definir:
-
+Un predicado interpretable declara:
 - roles requeridos y opcionales;
-- qué rol tiene agencia;
-- qué roles pueden ser objetivo;
+- agencia;
+- posibles objetivos;
 - categorías de consecuencia;
-- posibles relevancias;
-- información sobre intención;
-- compatibilidad con predicados base;
-- etiquetas de aprendizaje;
+- relevancia posible;
+- intencionalidad;
+- compatibilidad con vocabulario base;
+- tags de aprendizaje;
 - pistas de appraisal.
 
-Ejemplo conceptual:
-
-```text
-isla:harvested
-roles:
-  actor
-  resource
-  owner?
-  location?
-semantic_effects:
-  resource_gain
-  labor_success
-  ownership_interaction
-agency_role:
-  actor
-possible_relevance:
-  prosperity
-  hunger
-  ownership
-```
-
-El esquema **no** declara que cosechar sea “positivo”. Su valoración depende del agente y del contexto.
+Un schema no fija una emoción universal.
 
 ---
 
-# 12. Percepción y OBSERVE
+## 12. Percepción y atención
 
-El host entrega sólo aquello que el agente pudo percibir o recibir por otro canal.
+El host entrega sólo información accesible para el agente.
 
 MSPA aplica filtros de:
-
 - atención;
 - relevancia;
 - saliencia.
 
-`OBSERVE` actualiza el estado psicológico pero no ejecuta una decisión por sí mismo.
-
-Sin embargo, debe devolver una pista de scheduling:
-
-- `state_changed`;
-- `decision_recommended`;
-- `urgency`;
-- `current_action_threatened`.
-
-Así un ataque, incendio o miedo intenso puede provocar una reevaluación inmediata sin acoplar MSPA al loop del host.
+Un estímulo irrelevante puede no producir creencia, emoción ni memoria.
 
 ---
 
-# 13. Creencias
+## 13. Creencias
 
-Una creencia mantiene:
-
+Cada creencia mantiene:
 - proposición;
 - certeza;
 - fuente;
 - origen;
 - carga emocional;
 - timestamps;
-- evidencias a favor/en contra resumidas;
-- posibles dependencias de inferencia.
+- evidencia resumida;
+- dependencias de inferencia opcionales.
 
-Fuentes típicas:
-
-- observación;
-- testimonio;
-- inferencia;
-- recuerdo;
-- inspiración/influencia;
-- aprendizaje causal.
+Fuentes genéricas: observación, testimonio, inferencia, recuerdo, influencia externa y aprendizaje.
 
 El agente reacciona a sus creencias, no a la verdad global.
 
 ---
 
-# 14. Inferencia
+## 14. Inferencia
 
-La inferencia produce **hipótesis**, no verdades.
+La inferencia produce hipótesis, no verdades.
 
-Las reglas de inferencia deben ser **datos declarativos** y portables. No se permite depender de código arbitrario del host para representar la regla misma.
-
-Ejemplo conceptual:
-
-```text
-IF
-    A mspa:present_at E
-    B mspa:in_danger E
-    A mspa:able_to_help B
-    A mspa:left E
-THEN
-    hypothesis:
-        A mspa:failed_to_help B
-    base_confidence:
-        medium
-```
+Las reglas son datos declarativos y portables. El lenguaje:
+- no es Turing-completo;
+- no ejecuta código arbitrario;
+- no accede a red/filesystem;
+- tiene profundidad y presupuesto máximos;
+- limita hipótesis nuevas;
+- garantiza terminación bajo cuotas.
 
 ---
 
-# 15. Lenguaje de reglas acotado
+## 15. Actualización y sesgos
 
-El lenguaje de inferencia no será Turing-completo.
+La evidencia nueva no sustituye automáticamente una creencia.
 
-Requisitos:
-
-- declarativo;
-- sin acceso a red o filesystem;
-- sin ejecución de código nativo;
-- terminación garantizada;
-- profundidad máxima de inferencia;
-- límite de reglas disparadas por estímulo;
-- límite de hipótesis nuevas;
-- sin recursión ilimitada;
-- ciclos detectables y acotados;
-- presupuesto computacional explícito.
-
-El diseño puede inspirarse en un subconjunto tipo Datalog, pero no se fija todavía sintaxis ni implementación.
-
----
-
-# 16. Actualización y sesgo de creencias
-
-La evidencia no sustituye automáticamente una creencia.
-
-Pesan:
-
+Influyen:
 - certeza previa;
 - carga emocional;
 - confianza y respeto hacia la fuente;
 - claridad perceptiva;
 - rigidez derivada;
-- Curiosidad;
+- curiosidad;
 - emociones actuales;
 - coherencia con otras creencias;
 - independencia de fuentes.
 
-Esto permite sesgo de confirmación sin convertirlo en una regla especial por personaje.
+Esto permite sesgo de confirmación sin reglas específicas por personaje.
 
 ---
 
-# 17. Evaluación cognitiva
+## 16. Appraisal
 
-MSPA evalúa la **interpretación subjetiva** del agente.
-
-Factores principales:
-
+La evaluación subjetiva considera:
 - relevancia;
 - consecuencia;
 - agencia;
@@ -462,69 +271,52 @@ Factores principales:
 - relación;
 - expectativa previa.
 
-La novedad se deriva preferentemente del **error de predicción** entre expectativa y resultado, no de una variable mágica de sorpresa.
+La novedad deriva preferentemente del error de predicción entre expectativa y resultado.
 
 ---
 
-# 18. Emociones
+## 17. Emociones
 
-Se mantienen seis emociones base candidatas:
+Seis emociones base candidatas:
+- alegría;
+- tristeza;
+- miedo;
+- ira;
+- ansiedad;
+- aversión.
 
-- Alegría;
-- Tristeza;
-- Miedo;
-- Ira;
-- Ansiedad;
-- Aversión.
+Cada emoción es una instancia con intensidad, objetivo, causa percibida, creencia asociada, timestamp y decaimiento.
 
-Son instancias con:
-
-- intensidad;
-- objetivo;
-- causa percibida;
-- creencia asociada;
-- timestamp;
-- función de decaimiento.
-
-Las emociones derivadas (orgullo, culpa, gratitud, duelo, resentimiento, alivio, esperanza, etc.) se calculan a partir del estado y no requieren barras independientes.
-
-La distribución emocional debe validarse para evitar que una población sana derive sistemáticamente hacia un estado negativo.
+Estados derivados como orgullo, culpa, gratitud, duelo, resentimiento, alivio o esperanza se calculan a partir del estado existente y no requieren barras independientes.
 
 ---
 
-# 19. Ánimo y reapreciación
+## 18. Ánimo y reapreciación
 
-El ánimo usa dos dimensiones internas candidatas:
-
+El ánimo usa:
 - valencia;
 - activación.
 
-Las emociones pueden decaer de forma perezosa mediante timestamps.
-
-La reapreciación permite que una memoria conserve el mismo contenido factual pero cambie su carga emocional con el tiempo.
+La reapreciación permite cambiar la carga emocional de una memoria sin cambiar necesariamente su contenido factual.
 
 ---
 
-# 20. Relaciones
+## 19. Relaciones
 
-Las relaciones son direccionales y contienen inicialmente:
-
+Relaciones direccionales:
 - afecto;
 - confianza;
 - respeto;
 - familiaridad.
 
-`A → B` y `B → A` son estados diferentes.
-
-La deuda social continúa modelándose como memoria, compromiso o meta, no como quinta barra relacional.
+`A → B` y `B → A` son estados independientes.
 
 ---
 
-# 21. Memoria
+## 20. Memoria
 
 Una memoria conserva:
-
-- evento o proposición principal;
+- proposición/evento principal;
 - interpretación;
 - emoción original;
 - importancia;
@@ -535,529 +327,212 @@ Una memoria conserva:
 - reactivaciones;
 - referencias externas.
 
-La consolidación depende de una combinación de:
-
-- intensidad;
-- relevancia;
-- recurrencia;
-- consecuencias prolongadas.
-
-No todas las memorias se conservan.
+La consolidación depende de intensidad, relevancia, recurrencia y consecuencias prolongadas.
 
 ---
 
-# 22. Aprendizaje causal v1
+## 21. Aprendizaje causal inicial
 
-La primera versión del aprendizaje causal debe ser deliberadamente simple y acotada.
-
-Se modela mediante estadísticas sobre:
+Primera versión deliberadamente acotada:
 
 ```text
-ActionType
-+
-ContextTags
-→
-OutcomeTags
+ActionType + ContextTags -> OutcomeTags
 ```
 
-Cada patrón puede mantener:
+Cada patrón puede mantener intentos, éxitos, frecuencia de resultados, confianza y última activación.
 
-- intentos;
-- éxitos;
-- frecuencia de resultados;
-- confianza;
-- última activación.
-
-El Domain Pack declara qué etiquetas de contexto son relevantes para cada tipo de acción.
-
-No se intenta inicialmente una generalización cognitiva abierta ni aprendizaje simbólico arbitrario.
+No se intenta aprendizaje simbólico abierto en la primera versión.
 
 ---
 
-# 23. Exploración frente a explotación
+## 22. Exploración y explotación
 
-Curiosidad interviene como tolerancia a incertidumbre.
-
-Un agente con Curiosidad alta puede preferir ocasionalmente opciones con menor evidencia previa pero mayor información potencial.
-
-Un agente con Curiosidad baja prioriza prácticas conocidas y expectativas consolidadas.
-
-La exploración debe seguir limitada por riesgo, coste y otras metas.
+Curiosidad modula la tolerancia a incertidumbre y la preferencia por probar alternativas frente a repetir estrategias conocidas.
 
 ---
 
-# 24. Aprendizaje social
+## 23. Regulación emocional
 
-Un agente puede actualizar expectativas al:
-
-- observar a otro;
-- recibir consejo;
-- escuchar un testimonio;
-- imitar a una persona respetada;
-- observar consecuencias sociales.
-
-El peso depende de:
-
-- confianza;
-- respeto;
-- familiaridad;
-- prestigio percibido;
-- claridad de la observación;
-- compatibilidad con creencias previas.
+Una emoción intensa puede generar metas regulatorias o modificar utilidad de acciones. La regulación no sustituye al sistema de decisión.
 
 ---
 
-# 25. Cultura emergente
+## 24. Emoción sentida y expresada
 
-MSPA no mantiene una entidad global llamada “cultura” que controle individuos.
+El estado interno y la expresión observable son distintos. La expresión depende de personalidad, contexto, normas, relaciones y metas.
 
-La cultura se entiende como distribución de:
-
-- valores;
-- creencias normativas;
-- expectativas;
-- prácticas aprendidas;
-- símbolos y conceptos compartidos.
-
-Cada agente mantiene sus propias creencias sobre lo que el grupo espera.
-
-Herramientas externas pueden medir convergencia, divergencia, subculturas, polarización y transmisión generacional.
-
-La emergencia de cultura rica o religión se considera **hipótesis de diseño a validar**, no promesa del sistema.
+Otros agentes reaccionan a señales observables entregadas por el host, no al estado interno oculto.
 
 ---
 
-# 26. Influencia externa e inspiración
+## 25. Normas y cultura
 
-MSPA admite fuentes de influencia externas sin hardcodear un “Dios”.
+Las normas pueden representarse como creencias y valores individuales sobre lo aceptable y sobre lo que el grupo espera.
 
-Una `InfluenceSource` puede originar un estímulo.
+La cultura no es un controlador global. Se interpreta como distribución de valores, creencias, expectativas y prácticas entre agentes.
 
-El agente puede interpretarlo como:
-
-- mandato legítimo;
-- intuición;
-- amenaza;
-- ilusión;
-- inspiración;
-- mensaje religioso;
-- manipulación.
-
-La aceptación depende de personalidad, valores, creencias, relaciones y evidencia previa.
+Métricas poblacionales pueden calcularse externamente leyendo estados individuales.
 
 ---
 
-# 27. DECIDE
+## 26. Comunicación y transmisión
 
-`DECIDE` funciona aunque no haya habido un `OBSERVE` inmediatamente anterior.
+Una interacción social puede transmitir proposiciones. El receptor evalúa la afirmación según fuente, certeza, relaciones, evidencia previa y sesgos.
 
-El host entrega opciones realmente disponibles.
-
-MSPA no inventa acciones ejecutables que el host no haya ofrecido.
-
-Cada acción puede declarar:
-
-- tipo semántico;
-- instancia;
-- clave de continuidad;
-- actor;
-- objetivo;
-- efectos esperados;
-- costes;
-- riesgos;
-- tags;
-- consideraciones específicas.
+No se requiere un sistema global de rumores para transmitir creencias.
 
 ---
 
-# 28. Utility AI por consideraciones
+## 27. Influencia externa
 
-No se suman indiscriminadamente todos los sistemas psicológicos para todas las acciones.
+MSPA puede recibir fuentes externas de influencia como estímulos semánticos. El agente puede aceptar, reinterpretar, rechazar o ignorar según su estado.
 
-Cada tipo de acción declara qué **consideraciones** son relevantes.
-
-Cada consideración transforma una entrada normalizada mediante una curva de respuesta.
-
-Las curvas candidatas deben ser serializables, editables y reproducibles; se prefieren tablas lineales por tramos frente a funciones transcendentes.
-
-Se distinguen conceptualmente:
-
-- contribuciones positivas/negativas;
-- condicionantes que reducen fuertemente la viabilidad psicológica;
-- restricciones reales del host, que eliminan opciones antes de MSPA.
-
-La personalidad modifica sensibilidad y curvas, no entrega bonificaciones rígidas del tipo “+20 a cazar”.
+La influencia nunca equivale automáticamente a una orden ejecutada.
 
 ---
 
-# 29. Histéresis
+## 28. Portabilidad
 
-Una acción en curso recibe ventaja de continuidad según:
+Los estados psicológicos pueden contener referencias a entidades o conceptos no resolubles en el runtime actual. Esas referencias pueden preservarse de forma opaca.
 
-- progreso;
-- coste de interrupción;
-- persistencia de meta;
-- compromiso;
-- estabilidad contextual.
-
-Se abandona cuando:
-
-- termina;
-- deja de ser posible;
-- una emergencia exige reevaluación;
-- otra alternativa supera suficientemente el umbral de cambio.
-
-La clave de continuidad es obligatoria para que esta lógica sea estable entre llamadas.
+Los namespaces evitan colisiones entre orígenes distintos.
 
 ---
 
-# 30. REPORT
+## 29. Decisión
 
-El host informa el resultado real de una acción.
+El host ofrece acciones posibles. MSPA las evalúa mediante consideraciones relevantes.
 
-Puede incluir:
+La personalidad modifica pesos y sensibilidades, no suma bonificaciones rígidas.
 
-- éxito;
-- fracaso;
-- resultado parcial;
-- efectos observados;
-- consecuencias inesperadas;
-- causa de interrupción;
-- recursos obtenidos/perdidos;
-- terceros afectados.
-
-MSPA usa `REPORT` para:
-
-- aprendizaje causal;
-- actualización de metas;
-- emociones;
+Consideraciones típicas:
+- necesidad;
+- meta;
+- valor;
+- emoción;
+- relación;
 - memoria;
-- relaciones;
-- actualización de expectativas.
+- norma;
+- contexto;
+- coste;
+- riesgo;
+- expectativa aprendida.
+
+No todas se calculan para todas las acciones.
 
 ---
 
-# 31. Tiempo y evaluación perezosa
+## 30. Curvas y composición de utilidad
 
-Todas las operaciones relevantes incluyen tiempo lógico.
+Cada consideración transforma entradas normalizadas mediante curvas configurables y serializables, inicialmente lineales por tramos.
 
-Emociones, memoria, ánimo y otros estados no necesitan actualizarse cada frame.
+La composición distingue:
+- contribuciones positivas/negativas;
+- condicionantes;
+- restricciones físicas ya resueltas por el host;
+- histéresis;
+- ruido determinista pequeño.
 
-El estado efectivo puede derivarse de:
-
-- valor original;
-- timestamp;
-- tasa o curva de decaimiento;
-- reactivaciones.
-
-Esto reduce el coste y evita un “tick psicológico completo”.
+La fórmula final se valida por conformidad antes de congelarse.
 
 ---
 
-# 32. ADVANCE_TO
+## 31. Histéresis
 
-`ADVANCE_TO` no es un tick obligatorio.
+Una acción en curso recibe continuidad mediante `ActionContinuityKey`, progreso y coste de interrupción.
 
-Se conserva para:
-
-- reactivar agentes dormidos;
-- procesar metas vencidas;
-- resolver hitos temporales;
-- actualizar largos periodos fuera de simulación detallada;
-- consultar si el paso del tiempo por sí solo hace recomendable una nueva decisión.
-
-En sistemas simples puede no llamarse regularmente si otras operaciones ya llevan timestamps suficientes.
+Una alternativa debe superar suficientemente la preferencia actual salvo urgencia crítica.
 
 ---
 
-# 33. Niveles de simulación
+## 32. Tiempo y evaluación perezosa
 
-El host puede asignar un nivel de actividad:
+`PsychTime` usa ticks enteros de 64 bits.
 
-### Activo
+Emociones, ánimo, memoria y otros decaimientos se actualizan de forma perezosa a partir de timestamps cuando sea posible.
 
-Procesamiento completo cuando es necesario.
-
-### Reducido
-
-Sólo estímulos relevantes y decisiones menos frecuentes.
-
-### Dormido
-
-Estado conservado mediante marcas temporales y actualización diferida.
-
-Cambiar de nivel no debe cambiar retroactivamente la identidad psicológica del agente.
+No se requiere actualizar todos los agentes cada frame.
 
 ---
 
-# 34. Procesamiento por lotes
+## 33. Batch y determinismo
 
-MSPA debe admitir conceptualmente operaciones multiagente para rendimiento.
+Toda operación individual puede tener forma batch equivalente.
 
-Una llamada batch debe producir resultados equivalentes a procesar individualmente los agentes en un **orden canónico estable**.
-
-El paralelismo interno no puede cambiar el resultado observable.
-
-Los agentes no comparten RNG mutable global.
-
----
-
-# 35. Determinismo
-
-Objetivo:
-
-> mismo estado + mismos packs + mismas entradas + mismos timestamps + mismas seeds = mismo resultado lógico.
-
-Requisitos:
-
-- orden de iteración definido cuando afecte resultados;
-- RNG independiente por agente o stream derivado;
-- seeds estables;
-- ausencia de dependencia accidental del orden de threads;
-- curvas reproducibles;
-- versionado de packs y estado.
-
-No se promete determinismo bit-a-bit multiplataforma hasta elegir política numérica concreta.
+Reglas:
+- orden canónico estable;
+- RNG independiente por agente;
+- estructuras compartidas de sólo lectura durante el batch;
+- resultado independiente del scheduling de threads.
 
 ---
 
-# 36. Estado externo no confiable
+## 34. Seguridad
 
-Todo `AgentPsychState` importado debe considerarse entrada potencialmente hostil.
+Todo estado, pack o regla externa se considera no confiable.
 
-MSPA debe validar no sólo estructura, sino presupuestos.
-
-Deben existir límites configurables para:
-
+Se aplican cuotas a:
+- tamaño total;
 - número de creencias;
-- número de memorias;
-- número de metas;
-- número de relaciones;
-- tamaño de strings;
-- profundidad de proposiciones;
-- cantidad de reglas referenciadas;
-- tamaño total de estado;
-- hipótesis generadas por procesamiento;
-- profundidad de derivación;
-- complejidad de contexto de aprendizaje.
-
-Un estado que exceda límites debe rechazarse, truncarse de forma explícita o importarse bajo una política definida; nunca consumirse sin control.
-
----
-
-# 37. Domain Packs
-
-El producto de integración de cada juego es un **Domain Pack**.
-
-Debe declarar como datos, no como comportamiento oculto:
-
-- namespace;
-- versión;
-- dependencias;
-- vocabulario de dominio;
-- Predicate Schemas;
-- Event Templates;
-- tipos de acción;
-- roles semánticos;
-- consideraciones de utilidad;
-- curvas de respuesta;
-- reglas de inferencia;
-- ContextTags de aprendizaje;
-- OutcomeTags;
-- conceptos exportables;
-- compatibilidad con otros packs;
-- presupuestos y límites permitidos.
-
-MSPA debe incluir además un **Core Psychology Pack** con vocabulario y reglas generales mínimas.
-
----
-
-# 38. Compatibilidad entre packs
-
-Cada pack posee:
-
-- `pack_id`;
-- versión;
-- namespace;
-- dependencias;
-- versión mínima/máxima compatible cuando corresponda;
-- hashes o identidad de contenido cuando la implementación lo permita.
-
-Al importar un agente:
-
-- conceptos conocidos se resuelven;
-- conceptos desconocidos pueden permanecer opacos;
-- referencias externas se preservan;
-- reglas no autorizadas no se ejecutan;
-- incompatibilidades se reportan explícitamente.
-
----
-
-# 39. Migración entre mundos
-
-Un agente migrante debe poder conservar:
-
-- personalidad;
-- valores;
-- metas portables;
 - memorias;
-- creencias;
-- relaciones externas;
-- expectativas aprendidas;
-- prácticas y normas percibidas.
+- metas;
+- relaciones;
+- reglas;
+- profundidad de proposiciones;
+- strings;
+- patrones de aprendizaje;
+- derivaciones.
 
-El nuevo host no necesita comprender todos sus conceptos para conservarlos.
-
----
-
-# 40. Salida de decisión
-
-Una decisión puede devolver:
-
-- acción seleccionada;
-- objetivo;
-- confianza de decisión;
-- intención;
-- emoción expresada;
-- afirmaciones que desea comunicar;
-- explicación causal;
-- continuidad esperada.
-
-El host traduce esta intención a animación, diálogo, navegación y ejecución.
+Jerarquía:
+1. hard limits MSPA;
+2. runtime policy del host;
+3. recomendaciones externas.
 
 ---
 
-# 41. Explicabilidad
+## 35. Domain Packs
 
-MSPA debe poder responder:
+MSPA define el contrato de Domain Pack, pero los packs concretos pertenecen a proyectos consumidores externos.
 
-> ¿por qué este agente hizo esto?
+Pueden declarar vocabulario, Predicate Schemas, Event Templates, Action Schemas, reglas de inferencia, consideraciones, curvas y tags de aprendizaje.
 
-La explicación debe citar factores realmente usados por el proceso decisional, por ejemplo:
-
-```text
-Elegir: evitar a Torvando
-
-aversión hacia Torvando      alta
-confianza en Torvando        baja
-meta: evitar conflicto       relevante
-norma comunitaria            frena confrontación
-acción actual                sin progreso significativo
-```
-
-La explicación es requisito funcional, no accesorio de debug.
+Ningún Domain Pack concreto forma parte del diseño normativo de MSPA.
 
 ---
 
-# 42. Trazas
+## 36. Explicabilidad
 
-Un modo diagnóstico debe permitir observar, bajo límites configurables:
+MSPA debe poder explicar:
+- qué percibió;
+- qué creencia cambió;
+- qué inferencia se produjo;
+- qué memoria se activó;
+- qué emociones influyeron;
+- qué acciones se consideraron;
+- qué factores determinaron la decisión.
 
-```text
-OBSERVED
-→ proposition
-→ belief update
-→ inference
-→ appraisal
-→ emotion
-→ memory activation
-→ candidate actions
-→ considerations
-→ chosen action
-→ report
-→ learning update
-```
+La instrumentación no altera la simulación.
 
 ---
 
-# 43. Degradación modular
+## 37. Conformidad
 
-Si un módulo opcional está desactivado, el comportamiento debe permanecer definido.
-
-Ejemplos:
-
-- sin memoria: no hay reactivación episódica, pero relaciones y emociones siguen funcionando;
-- sin relaciones: se usa estado social neutral por defecto;
-- sin inferencia avanzada: sólo creencias directas/testimoniales;
-- sin ánimo: emociones siguen actuando;
-- sin regulación: no se generan estrategias de coping;
-- sin aprendizaje: las expectativas proceden sólo de packs o creencias iniciales;
-- sin expresión: el estado interno existe pero no se generan señales emocionales externas.
-
----
-
-# 44. Sandbox antes de congelar
-
-La arquitectura no se congela hasta superar un sandbox ejecutable.
-
-Los escenarios deben expresarse como datos neutrales y reutilizarse luego como suite de conformidad.
-
-Casos mínimos:
-
-1. Mara: cuatro perfiles reciben evidencia contradictoria y divergen sin reglas especiales.
-2. Inspiración: agentes diferentes interpretan una misma influencia de forma distinta.
-3. Viajero: un agente migra entre mundos conservando referencias y expectativas desconocidas para el destino.
-4. Histéresis: opciones casi empatadas no generan oscilación.
-5. Determinismo: mismos datos producen misma secuencia lógica.
-6. Batch: individual y batch producen resultados equivalentes.
-7. Estado hostil: un estado sobredimensionado es rechazado o limitado de forma definida.
-8. Aprendizaje: un agente forma una expectativa simple `acción + tags → resultado` y la actualiza tras éxitos y fallos.
-9. Cultura: dos poblaciones con seeds distintas pueden divergir y, al entrar en contacto, modificar creencias y prácticas sin una regla especial `culture_conflict`.
+Antes de congelar una API de producción se validan escenarios **abstractos**, sin nombres ni contenido de proyectos consumidores, que cubran:
+- divergencia de creencias;
+- contradicción de evidencia;
+- reapreciación;
+- influencia externa;
+- referencias no resolubles;
+- aprendizaje causal simple;
+- histéresis;
+- batch vs individual;
+- determinismo;
+- seguridad ante entradas hostiles.
 
 ---
 
-# 45. Isla Viva como prueba de contrato
+## 38. Invariante de separación
 
-Antes de escribir el runtime de producción debe existir un `IslaVivaPsychPack` suficientemente completo en datos/diseño.
+**MSPA no incorpora personajes, entidades, lugares, eventos, namespaces, nombres de repositorios ni reglas de un host concreto en su diseño normativo ni en su core.**
 
-Debe demostrar que puede representar al menos:
-
-- hambre, sueño, familia, trabajo y vivienda;
-- relaciones familiares y sociales;
-- nacimiento, muerte y duelo;
-- llegada de barcos y extranjeros;
-- aprendizaje de trabajo y hábitos;
-- transmisión de creencias;
-- influencia divina;
-- viaje de habitantes entre islas;
-- choque de normas entre comunidades.
-
-Si estos casos exigen excepciones dentro del núcleo MSPA, el contrato todavía no está listo.
-
----
-
-# 46. Candidato técnico, no decisión congelada
-
-Para el sandbox se considera candidato **Python**, por velocidad de iteración, análisis y visualización.
-
-Para producción se considera actualmente candidato **Rust con ABI C estable** como frontera de integración, debido a:
-
-- seguridad de memoria al procesar estados/packs externos;
-- tipos adecuados para estados versionados;
-- facilidad para encapsular concurrencia segura;
-- capacidad de integrar desde C/C++/C#/Godot/Unity/Python;
-- posibilidad futura de WebAssembly.
-
-Esto **no autoriza todavía la implementación** ni congela lenguaje, ABI, formato de serialización o build system. Debe validarse contra el Domain Pack y el sandbox.
-
----
-
-# 47. Estado de congelación
-
-La v2.4 es una **arquitectura candidata implementable**, no una API final.
-
-Antes de congelar deben quedar demostrados:
-
-- esquema de proposiciones;
-- vocabulario base;
-- inferencia declarativa acotada;
-- utilidad por consideraciones;
-- continuidad de acciones;
-- retorno de urgencia de `OBSERVE`;
-- aprendizaje causal acotado;
-- determinismo individual y batch;
-- importación segura;
-- Domain Pack realista de Isla Viva;
-- escenarios contractuales en sandbox.
-
-Sólo después debe fijarse una API binaria o pública definitiva.
+Todo elemento específico pertenece al proyecto consumidor o a datos externos compatibles con los contratos públicos.
