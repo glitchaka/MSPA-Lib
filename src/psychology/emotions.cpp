@@ -1,6 +1,7 @@
 #include "mspa/psychology/emotions.hpp"
 
 #include <algorithm>
+#include <cmath>
 
 namespace mspa {
 
