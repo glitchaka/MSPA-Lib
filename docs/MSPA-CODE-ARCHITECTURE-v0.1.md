@@ -38,15 +38,15 @@ Para builds de conformidad:
 
 Estas reglas reducen divergencias, pero no implican todavía garantía bit-a-bit entre toolchains distintos.
 
-## 3. Modelo estructural
+## 3. Modelo estructural e identidad
 
 MSPA no modela jerarquías del mundo del host.
 
 Tipos contractuales principales:
 - `RuntimeId`
+- `WorldId`
 - `AgentId`
 - `EntityRef`
-- `WorldId`
 - `NamespaceId`
 - `ConceptId`
 - `PredicateId`
@@ -58,9 +58,22 @@ Tipos contractuales principales:
 - `ActionInstanceId`
 - `ActionContinuityKey`
 - `PackId`
+- `TimeDomainId`
 - `PsychTime`
 
 Los IDs fuertes evitan mezclar accidentalmente dominios distintos.
+
+### `AgentId`
+
+`AgentId` incluye explícitamente el mundo de origen:
+
+```text
+AgentId
+  WorldId world
+  uint64 local_id
+```
+
+Dos agentes con el mismo `local_id` pero distinto `WorldId` son identidades diferentes. El remapeo durante importación nunca elimina silenciosamente el origen: si cambia la identidad efectiva, la operación devuelve el mapeo aplicado.
 
 ## 4. Múltiples runtimes en un proceso
 
@@ -72,6 +85,7 @@ Cada runtime posee de forma aislada:
 Runtime
   RuntimeId
   RuntimeConfig
+  TimeDomain
   RegistrySnapshot
   AgentStore
   SeedRoot
@@ -93,6 +107,7 @@ Reglas:
 MSPA-Lib/
 ├── include/mspa/
 │   ├── api/
+│   ├── base/
 │   ├── ids/
 │   ├── model/
 │   ├── runtime/
@@ -135,7 +150,7 @@ Responsabilidad: tipos fundamentales sin lógica psicológica.
 
 Incluye:
 - IDs fuertes;
-- `PsychTime`;
+- `PsychTime`, `TimeScale` y `TimeDomain`;
 - `Result<T>` y `Error`;
 - límites/cuotas;
 - RNG determinista;
@@ -143,15 +158,41 @@ Incluye:
 - tipos normalizados;
 - versiones de schema/runtime/state.
 
-### `PsychTime`
+### 6.1 `PsychTime` y dominio temporal
 
 ```text
-uint64 logical ticks
+PsychTime = uint64 logical ticks
 ```
 
-La escala del tick la define el host al crear el runtime y no cambia durante la vida de ese runtime. Todos los timestamps contractuales usan el mismo dominio temporal.
+Cada runtime fija un `TimeDomain` al crearse. El dominio contiene una identidad y una escala racional, nunca un factor `float`.
 
-### RNG
+```text
+TimeDomain
+  TimeDomainId id
+  TimeScale scale
+
+TimeScale
+  uint64 ticks_per_second_num
+  uint64 ticks_per_second_den
+```
+
+La escala no cambia durante la vida del runtime.
+
+### 6.2 Tiempo de evento vs tiempo de procesamiento
+
+Las operaciones simulacionales usan un **tiempo de procesamiento monotónico**. Un estímulo puede además llevar un `event_time` opcional que representa cuándo ocurrió el hecho conocido.
+
+```text
+StimulusTime
+  PsychTime process_time
+  optional<PsychTime> event_time
+```
+
+`process_time` no puede retroceder respecto al agente. `event_time` sí puede ser anterior: testimonios tardíos, mensajes de red, recuerdos o evidencia histórica no producen `TimeRegression` sólo por referirse al pasado.
+
+Si el host recibe una marca temporal desde otro dominio, debe normalizarla o entregarla mediante la política de importación definida abajo.
+
+### 6.3 RNG
 
 - stream independiente por agente;
 - seed derivada de `SeedRoot + AgentId + stream_kind`;
@@ -160,7 +201,7 @@ La escala del tick la define el host al crear el runtime y no cambia durante la 
 
 ## 7. Política de errores
 
-### API C++
+### 7.1 API C++
 
 Errores esperables usan:
 
@@ -179,12 +220,15 @@ Códigos mínimos:
 - `NamespaceConflict`
 - `TimeRegression`
 - `BatchConflict`
+- `OutOfMemory`
 - `UnsupportedOperation`
 - `InternalInvariantViolation`
 
 Las APIs públicas no usan excepciones como control de flujo normal y ninguna excepción cruza la frontera pública.
 
-### Fachada C
+La primera implementación se compila con excepciones C++ habilitadas internamente. Toda frontera pública captura `std::bad_alloc` y lo convierte en `OutOfMemory`. Un build futuro sin excepciones sólo será válido cuando exista una política de asignación que conserve esa garantía sin terminar el proceso.
+
+### 7.2 Fachada C
 
 La ABI C devuelve `mspa_status` y usa parámetros de salida explícitos. Los detalles de error se consultan mediante estructuras o buffers estables definidos por la ABI; nunca se exponen excepciones C++ ni punteros a memoria temporal.
 
@@ -231,6 +275,7 @@ Estado privado por agente:
 
 ```text
 AgentPsychState
+  AgentId
   Personality
   Values
   Beliefs
@@ -357,7 +402,13 @@ Operaciones públicas conceptuales:
 
 ## 13. `OBSERVE`
 
-Entrada: agente, estímulo, timestamp.
+Entrada conceptual:
+
+```text
+OBSERVE(runtime, agent, stimulus, process_time)
+```
+
+El `Stimulus` puede incluir `event_time` opcional. Sólo `process_time` participa en la regla de monotonía del runtime.
 
 Salida:
 
@@ -380,7 +431,7 @@ MSPA recomienda; el host controla scheduling y ejecución.
 
 ## 14. `DECIDE`
 
-Entrada: `AgentId`, timestamp, opciones disponibles y acción/continuidad actual opcional.
+Entrada: `AgentId`, `process_time`, opciones disponibles y acción/continuidad actual opcional.
 
 Salida: acción seleccionada, objetivo, confianza, intención, expresión observable, afirmaciones a transmitir y explicación causal.
 
@@ -400,6 +451,8 @@ No es un tick obligatorio. Sirve para materializar efectos perezosos, caducar me
 
 Toda operación simulacional con forma batch debe conservar equivalencia semántica con la ejecución individual canónica.
 
+Una llamada individual se define semánticamente como **un batch de una operación**, de modo que captura los mismos snapshots de registry/configuración que la forma batch.
+
 Antes de iniciar un batch se congelan:
 - `RegistrySnapshot`;
 - configuración;
@@ -415,7 +468,24 @@ Durante el batch sólo son mutables:
 
 Nuevos símbolos, cambios de pack o cachés semánticas que alteren resultados se publican después del batch en un punto de sincronización definido.
 
-El orden lógico se deriva de IDs estables, nunca de hash, dirección de memoria ni scheduling de threads.
+### Orden canónico
+
+Cada entrada de batch recibe un `input_sequence` igual a su posición estable en la entrada del host.
+
+Orden lógico:
+
+```text
+(AgentId, input_sequence)
+```
+
+Así dos operaciones del mismo agente conservan el orden explícito del host sin depender del scheduling de threads.
+
+`BatchConflict` se produce, como mínimo, cuando:
+- el mismo agente recibe dos operaciones con el mismo `input_sequence`;
+- las operaciones de un agente exigen tiempos de procesamiento incompatibles con ese orden;
+- se mezcla una mutación de lifecycle con una operación simulacional del mismo agente de forma que el orden no pueda resolverse por la secuencia proporcionada.
+
+Un conflicto nunca se resuelve mediante orden de hash, dirección de memoria o thread scheduling.
 
 ## 18. `validation` y cuotas
 
@@ -435,7 +505,7 @@ Reglas:
 
 Se limitan como mínimo tamaño total de estado, creencias, memorias, metas, relaciones, reglas, profundidad de proposiciones, strings, patrones de aprendizaje y derivaciones por operación.
 
-## 19. `persistence`
+## 19. `persistence` e importación temporal
 
 `AgentPsychState` es el modelo portable.
 
@@ -446,15 +516,51 @@ Requisitos:
 - referencias externas preservables;
 - validación previa al import;
 - remapeo explícito de IDs cuando exista colisión;
-- migraciones controladas.
+- migraciones controladas;
+- metadatos de dominio temporal de origen;
+- `exported_at` del runtime de origen.
 
-El formato físico final no se fija en esta etapa.
+### Política de tiempo al importar
+
+La política por defecto es `RebaseRelative`:
+- las edades/duraciones de timestamps se calculan respecto de `exported_at`;
+- esas duraciones se convierten racionalmente a la escala del runtime destino;
+- se vuelven a anclar en `import_time`;
+- la conversión usa enteros con detección de overflow y una política de redondeo definida.
+
+También pueden existir:
+- `PreserveAbsolute`, sólo si origen y destino declaran dominios compatibles;
+- `RejectIncompatible`, para hosts que no quieran conversión.
+
+Nunca se reinterpretan ticks de un dominio como si pertenecieran a otro.
+
+### Política de RNG al importar
+
+`AgentPsychState` conserva `RngState`, pero la política depende del propósito:
+- **por defecto en traslado a otro runtime/mundo:** `RekeyForDestination`; se deriva un nuevo stream desde el `SeedRoot` destino + `AgentId` efectivo + `stream_kind`, evitando secuencias correlacionadas entre mundos;
+- **restore/replay del mismo contexto lógico:** `PreserveState`, permitido sólo cuando el host lo solicita explícitamente.
+
+La política aplicada queda registrada en el resultado de importación.
+
+El formato físico final de serialización no se fija en esta etapa.
 
 ## 20. `diagnostics`
 
-Debe exponer opcionalmente estímulos procesados, cambios de creencias, inferencias, memorias activadas, emociones relevantes, opciones consideradas, contribuciones de utilidad, razones de decisión, errores y cuotas alcanzadas.
+Debe existir desde la simulación mínima, no como añadido tardío.
 
-La instrumentación no modifica el resultado simulacional.
+Nivel mínimo obligatorio para depuración:
+- operación procesada;
+- `AgentId`;
+- tiempos de evento/procesamiento cuando existan;
+- cambios de creencias;
+- appraisal resumido;
+- emociones relevantes;
+- opciones consideradas;
+- contribuciones principales de utilidad;
+- razón compacta de decisión;
+- errores y cuotas alcanzadas.
+
+Una traza extendida puede añadirse después. La instrumentación no modifica el resultado simulacional.
 
 ## 21. Conectores
 
@@ -491,32 +597,74 @@ No se permiten dependencias inversas hacia un consumidor.
 
 ## 23. Orden de implementación
 
-1. `base`: IDs, tiempo, `Result`, errores, RNG, cuotas.
-2. lifecycle mínimo: `Runtime`, `AgentStore`, `CREATE_AGENT`, `REMOVE_AGENT`.
-3. semantics: proposiciones, registry snapshot, schemas.
-4. simulación mínima: `OBSERVE`, `DECIDE`, `REPORT`, `ADVANCE_TO`.
-5. beliefs + appraisal + emociones.
-6. utility + histéresis.
-7. memoria + relaciones + metas + ánimo.
-8. inferencia declarativa + aprendizaje acotado.
-9. export/import + validación + remapeo.
-10. batch + paralelización opcional.
-11. diagnostics.
-12. fachada C.
+### Etapa 0 — conformidad y trazas mínimas
+
+Antes de desarrollar comportamiento complejo se fija:
+- formato neutral de escenarios de prueba;
+- runner mínimo de conformidad;
+- traza compacta de `OBSERVE` / `DECIDE`;
+- criterios de determinismo y comparación.
+
+### Etapa 1 — `base`
+
+IDs, `AgentId` compuesto, tiempo/dominios temporales, `Result`, errores, RNG, cuotas.
+
+### Etapa 2 — lifecycle y runtime mínimo
+
+`Runtime`, `AgentStore`, `CREATE_AGENT`, `REMOVE_AGENT`, `HAS_AGENT` y diagnostics mínimos.
+
+### Etapa 3 — semantics y simulación mínima
+
+Proposiciones, registry snapshot, schemas, `OBSERVE`, `DECIDE`, `REPORT`, `ADVANCE_TO`.
+
+### Etapa 4 — conocimiento y afecto
+
+Beliefs, appraisal, emociones y actualización por evidencia.
+
+### Etapa 5 — decisión
+
+Considerations, curvas, utilidad e histéresis, siempre con traza compacta activa.
+
+### Etapa 6 — continuidad psicológica
+
+Memoria, relaciones, metas, ánimo y reapreciación.
+
+### Etapa 7 — inferencia y aprendizaje
+
+Inferencia declarativa y aprendizaje causal acotado.
+
+### Etapa 8 — portabilidad
+
+Export/import, conversión temporal, políticas RNG, validación y remapeo.
+
+### Etapa 9 — batch y rendimiento
+
+API batch, orden secundario, paralelización opcional y equivalencia.
+
+### Etapa 10 — fachada C
+
+ABI C y bindings externos.
 
 ## 24. Suite de conformidad previa a estabilidad
 
 Casos abstractos, sin nombres ni contenido de hosts:
+- IDs fuertes y aislamiento por `WorldId`;
 - crear/eliminar agentes;
 - inicialización derivada determinista;
 - divergencia de creencias ante evidencia equivalente;
 - contradicción y reapreciación;
+- estímulo tardío con `event_time < process_time`;
+- conversión/rebase de timestamps entre dominios;
 - continuidad/histéresis;
 - `OBSERVE` con cada nivel de urgencia;
 - batch vs individual;
+- dos operaciones del mismo agente conservando `input_sequence`;
+- detección de `BatchConflict`;
 - múltiples runtimes en el mismo proceso;
 - import con símbolos desconocidos durante un batch;
 - colisión/remapeo de IDs;
+- `RekeyForDestination` y `PreserveState` del RNG;
+- conversión de `std::bad_alloc` a `OutOfMemory` en frontera pública;
 - rechazo de estados hostiles/cuotas;
 - aprendizaje causal simple;
 - determinismo repetido con misma seed y orden canónico.
@@ -526,18 +674,27 @@ Casos abstractos, sin nombres ni contenido de hosts:
 Fijado para la primera implementación:
 - C++17;
 - `PsychTime` entero de 64 bits;
+- escala temporal racional por runtime;
+- `AgentId = WorldId + local_id`;
+- `process_time` separado de `event_time`;
+- import temporal con `RebaseRelative` por defecto;
 - `Result<T>` para errores esperables;
+- `std::bad_alloc` convertido a `OutOfMemory` en fronteras públicas;
 - excepciones no atraviesan API pública;
 - múltiples runtimes independientes;
 - registry snapshots inmutables durante batch;
 - publicación de mutaciones semánticas entre batches;
+- orden batch `(AgentId, input_sequence)`;
+- llamada individual equivalente a batch de uno;
 - RNG independiente por agente;
+- `RekeyForDestination` como política RNG por defecto al trasladar agentes;
 - curvas lineales por tramos como formato configurable inicial;
+- diagnostics mínimos desde el runtime inicial;
 - ninguna dependencia de hosts concretos.
 
 Aún no fijado:
 - formato físico de serialización;
-- sistema de build definitivo;
+- sistema de build definitivo más allá del soporte CMake inicial;
 - modelo de threading interno;
 - representación numérica final para garantías bit-a-bit multiplataforma;
 - layout exacto de la ABI C.
