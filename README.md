@@ -1,64 +1,73 @@
 # MSPA-Lib
 
-**MSPA — Motor de Simulación Psicológica de Agentes**  
+**MSPA — Motor de Simulación Psicológica y Cultural de Agentes**  
 **Agent Psychology Simulation Middleware**
 
-MSPA-Lib es una librería conceptual para dotar agentes autónomos de personalidad, valores, metas, creencias subjetivas, emociones, ánimo, memoria, relaciones y preferencias de acción explicables.
+MSPA-Lib es una librería conceptual para dotar agentes autónomos de personalidad, valores, metas, creencias subjetivas, emociones, ánimo, memoria, relaciones, aprendizaje y preferencias de acción explicables. También busca permitir que prácticas, normas y cultura emerjan de la interacción entre agentes, sin convertir “la cultura” en una entidad omnisciente separada.
 
-> Estado actual: **diseño lógico**. No existe implementación de código todavía.
+> Estado actual: **diseño lógico / arquitectura candidata**. No existe implementación de producción todavía.
 
-La librería está pensada para ser desacoplada del motor y del género de juego. No debe conocer sprites, pathfinding, inventarios concretos, escenas, animaciones, navegación, combate ni conceptos propios de un proyecto específico. El proyecto anfitrión describe lo que ocurre y qué acciones son posibles; MSPA interpreta esos datos desde la perspectiva de cada agente y devuelve preferencias de conducta y estado psicológico.
+La librería está pensada para ser desacoplada del motor y del género de juego. No debe conocer sprites, pathfinding, inventarios concretos, escenas, animaciones, navegación, combate ni conceptos propios de un proyecto específico. El proyecto anfitrión describe lo que ocurre, qué puede percibirse y qué acciones son posibles; MSPA interpreta esos datos desde la perspectiva de cada agente y devuelve estado psicológico e intención explicable.
 
 ## Contrato conceptual
 
 ```text
-MUNDO / JUEGO
+HOST / MUNDO
+    ↓ OBSERVE
+estímulos percibidos
     ↓
-acontecimientos percibidos + acciones disponibles
+MSPA actualiza estado interno
+    ↓ DECIDE
+opciones reales del host
     ↓
-MSPA-Lib
+MSPA devuelve intención + expresión + explicación
     ↓
-creencias + emociones + metas + preferencias + explicación
+HOST ejecuta
+    ↓ REPORT
+resultado real
     ↓
-MUNDO / JUEGO
+MSPA aprende / actualiza
 ```
 
-El juego dice **qué ocurrió, qué pudo percibirse y qué puede hacerse**. MSPA decide **qué cree el agente que ocurrió, cómo lo interpreta, qué siente y qué prefiere hacer**. El juego ejecuta la acción y devuelve el resultado.
+Además, `ADVANCE` comunica paso de tiempo lógico y `EXPORT / IMPORT` permite persistir o trasladar el estado psicológico de un agente entre runtimes o mundos.
 
 ## Principios de diseño
 
 - El agente reacciona a **lo que cree**, no a la verdad global del juego.
+- La percepción, la creencia, la inferencia y la reapreciación son procesos separados.
 - Personalidad, valores, metas, emociones, ánimo, memoria y relaciones cumplen funciones distintas.
-- Las emociones modifican decisiones; no sustituyen la toma de decisiones.
-- La personalidad modifica sensibilidades y pesos; no actúa como una tabla de bonificaciones directas.
-- Las creencias tienen fuente, certeza y pueden ser erróneas.
-- Las memorias almacenan interpretación y carga emocional, no sólo hechos.
+- La personalidad modifica sensibilidades y curvas de valoración; no entrega bonificaciones rígidas a acciones.
+- Las creencias usan proposiciones semánticas con fuente y certeza.
+- Las inferencias producen hipótesis mediante reglas declarativas y portables.
+- El aprendizaje práctico se modela como expectativas `acción + contexto → resultado`.
+- MSPA selecciona sólo entre acciones realmente ofrecidas por el host.
 - Las relaciones son direccionales.
-- El sistema debe ser determinista con el mismo estado inicial, eventos, tiempo y semilla.
-- La API futura deberá ser pequeña y agnóstica al motor.
-- La explicación causal de una decisión forma parte del diseño, no es una herramienta secundaria.
+- Las emociones se representan como instancias con causa y objetivo.
+- La cultura se entiende como distribución de creencias, valores, expectativas y prácticas entre agentes, no como un controlador global.
+- El runtime debe ser explicable, reproducible y portable.
+- El diseño debe escalar mediante eventos, evaluación perezosa y distintos niveles de simulación.
+- Una misma librería debe poder funcionar con distintos juegos mediante un **Core Psychology Pack** y **Domain Packs** versionados.
 
-## Núcleo psicológico previsto
+## Estado del diseño
 
-1. Personalidad: 6 ejes.
-2. Valores configurables.
-3. Necesidades aportadas por el host.
-4. Metas activas y compromisos.
-5. Percepción y atención.
-6. Creencias subjetivas.
-7. Evaluación cognitiva.
-8. 6 emociones básicas y emociones derivadas.
-9. Regulación emocional.
-10. Emoción sentida y emoción expresada.
-11. Ánimo mediante valencia y activación.
-12. Relaciones: afecto, confianza, respeto y familiaridad.
-13. Memoria selectiva, reactivación y reapreciación.
-14. Normas culturales.
-15. Decisión por utilidad, histéresis y ruido bajo.
-16. Sesgo de confirmación.
+La versión vigente es una **arquitectura candidata v2.3**, todavía no congelada. Antes de implementar producción deben demostrarse en sandbox, entre otros:
 
-## Alcance deliberadamente excluido por ahora
+- lenguaje de proposiciones;
+- inferencia declarativa;
+- composición de utilidad;
+- aprendizaje causal y social;
+- sesgos de actualización de creencias;
+- histéresis;
+- determinismo;
+- migración de agentes entre mundos;
+- divergencia y contacto cultural.
 
-No forman parte del núcleo inicial: ideologías complejas, enfermedades mentales, personalidad política, árbol de rasgos, deuda social como estadística, ánimo colectivo, contagio emocional, reputación pública compleja, identidad narrativa ni un sistema de rumores independiente.
+## Documentación vigente
 
-La especificación detallada está en [`docs/MSPA-SPEC-v2.1.md`](docs/MSPA-SPEC-v2.1.md).
+- [`docs/MSPA-SPEC-v2.3.md`](docs/MSPA-SPEC-v2.3.md) — arquitectura lógica candidata completa.
+- [`docs/MSPA-INTERACTION-CONTRACT-v0.1.md`](docs/MSPA-INTERACTION-CONTRACT-v0.1.md) — contrato neutral `OBSERVE → DECIDE → REPORT → ADVANCE`, tipos lógicos y portabilidad.
+- [`docs/MSPA-SPEC-v2.1.md`](docs/MSPA-SPEC-v2.1.md) — especificación anterior conservada como historial de diseño.
+
+## Fuera de alcance por ahora
+
+No se ha autorizado todavía elegir lenguaje, ABI, bindings, sistema de build, formato de archivo ni serialización concreta. Tampoco se consideran demostradas todavía religiones emergentes, instituciones complejas, cultura interesante o innovación sostenida: son hipótesis que deberán validarse mediante simulación.
