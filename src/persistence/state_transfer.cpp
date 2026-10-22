@@ -1,7 +1,5 @@
 #include "mspa/persistence/state_transfer.hpp"
 
-#include "mspa/base/rng.hpp"
-
 namespace mspa {
 
 namespace {
@@ -74,7 +72,7 @@ Result<ImportResult> import_agent_state(
     }
 
     if (options.rng_policy == RngImportPolicy::RekeyForDestination) {
-        AgentRng rng = AgentRng::from_seed(options.destination_seed_root, options.destination_id, 0);
+        DeterministicRng rng(derive_agent_seed(options.destination_seed_root, options.destination_id, 0));
         result.state.rng_state = rng.state();
     }
 
