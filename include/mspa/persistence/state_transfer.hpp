@@ -3,15 +3,11 @@
 #include <cstdint>
 
 #include "mspa/base/result.hpp"
+#include "mspa/base/rng.hpp"
 #include "mspa/base/time.hpp"
 #include "mspa/model/agent_state.hpp"
 
 namespace mspa {
-
-enum class RngImportPolicy : std::uint8_t {
-    RekeyForDestination,
-    PreserveState
-};
 
 struct ExportedAgent {
     AgentPsychState state{};
