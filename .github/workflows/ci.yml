@@ -1,5 +1,6 @@
 name: MSPA CI
 
+# mspa_api_surface_tests links and calls the complete public C++ API skeleton.
 on:
   push:
     branches: [main]
