@@ -6,6 +6,7 @@
 
 #include "mspa/base/result.hpp"
 #include "mspa/decision/decision.hpp"
+#include "mspa/decision/hysteresis.hpp"
 #include "mspa/diagnostics/trace.hpp"
 #include "mspa/model/agent_state.hpp"
 #include "mspa/persistence/state_transfer.hpp"
@@ -79,6 +80,7 @@ struct ReactInput {
     ObserveInput observation{};
     std::vector<ActionOption> actions{};
     ActionContinuityKey current_action{};
+    DecisionContext decision_context{};
 };
 
 struct ReactResult {
@@ -88,7 +90,14 @@ struct ReactResult {
 
 struct ObserveBatchItem { std::uint64_t input_sequence{0}; ObserveInput input{}; };
 struct ObserveBatchOutput { std::uint64_t input_sequence{0}; AgentId agent{}; ObserveResult result{}; };
-struct DecideBatchItem { std::uint64_t input_sequence{0}; AgentId agent{}; std::vector<ActionOption> actions{}; PsychTime process_time{}; ActionContinuityKey current{}; };
+struct DecideBatchItem {
+    std::uint64_t input_sequence{0};
+    AgentId agent{};
+    std::vector<ActionOption> actions{};
+    PsychTime process_time{};
+    ActionContinuityKey current{};
+    DecisionContext context{};
+};
 struct DecideBatchOutput { std::uint64_t input_sequence{0}; AgentId agent{}; Decision result{}; };
 struct ReportBatchItem { std::uint64_t input_sequence{0}; ReportInput input{}; };
 struct ReportBatchOutput { std::uint64_t input_sequence{0}; AgentId agent{}; };
@@ -113,7 +122,8 @@ public:
 
     Result<ObserveResult> observe(const ObserveInput& input) noexcept;
     Result<Decision> decide(AgentId agent, const std::vector<ActionOption>& actions,
-                            PsychTime process_time, ActionContinuityKey current = {}) noexcept;
+                            PsychTime process_time, ActionContinuityKey current = {},
+                            const DecisionContext& context = {}) noexcept;
     Result<void> report(const ReportInput& input) noexcept;
     Result<AdvanceResult> advance_to(AgentId agent, PsychTime target_time) noexcept;
     Result<ReactResult> react(const ReactInput& input) noexcept;
@@ -146,6 +156,7 @@ private:
     AgentStore agents_{};
     PsychologyEngine psychology_{};
     UtilityComposer utility_{};
+    HysteresisPolicy hysteresis_{};
     TraceSink diagnostics_{};
 };
 
