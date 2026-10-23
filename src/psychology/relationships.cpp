@@ -1,21 +1,3 @@
 #include "mspa/psychology/relationships.hpp"
-
 #include <algorithm>
-
-namespace mspa {
-
-RelationshipState& RelationshipSystem::get_or_create(AgentPsychState& agent, AgentId other) const {
-    auto it = std::find_if(agent.relationships.begin(), agent.relationships.end(),
-                           [&](const RelationshipState& relation) { return relation.other == other; });
-    if (it != agent.relationships.end()) return *it;
-    agent.relationships.push_back(RelationshipState{other});
-    return agent.relationships.back();
-}
-
-const RelationshipState* RelationshipSystem::find(const AgentPsychState& agent, AgentId other) const noexcept {
-    auto it = std::find_if(agent.relationships.begin(), agent.relationships.end(),
-                           [&](const RelationshipState& relation) { return relation.other == other; });
-    return it == agent.relationships.end() ? nullptr : &*it;
-}
-
-} // namespace mspa
+namespace mspa {RelationshipState&RelationshipSystem::get_or_create(AgentPsychState&a,AgentId o)const{auto it=std::find_if(a.relationships.begin(),a.relationships.end(),[&](const auto&r){return r.other==o;});if(it!=a.relationships.end())return *it;a.relationships.push_back({o,0,0,0,0});return a.relationships.back();}const RelationshipState*RelationshipSystem::find(const AgentPsychState&a,AgentId o)const noexcept{auto it=std::find_if(a.relationships.begin(),a.relationships.end(),[&](const auto&r){return r.other==o;});return it==a.relationships.end()?nullptr:&*it;}Result<void>RelationshipSystem::adjust(AgentPsychState&a,AgentId o,const RelationshipDelta&d)const{if(!o.valid())return make_error(ErrorCode::InvalidArgument,"invalid relationship target");auto&r=get_or_create(a,o);r.affection=std::clamp(r.affection+d.affection,-1.0f,1.0f);r.trust=std::clamp(r.trust+d.trust,-1.0f,1.0f);r.respect=std::clamp(r.respect+d.respect,-1.0f,1.0f);r.familiarity=std::clamp(r.familiarity+d.familiarity,0.0f,1.0f);return {};}}

@@ -1,34 +1,4 @@
 #include "mspa/psychology/values.hpp"
-
 #include <algorithm>
-
-namespace mspa {
-
-Result<void> ValueSystem::set(AgentPsychState& agent, ConceptId concept_id, float value) const {
-    if (!concept_id.valid()) return make_error(ErrorCode::InvalidArgument, "value concept id must be valid");
-    const float normalized = std::clamp(value, 0.0f, 1.0f);
-    auto it = std::find_if(agent.values.begin(), agent.values.end(), [&](const ValueEntry& entry) {
-        return entry.concept_id == concept_id;
-    });
-    if (it == agent.values.end()) agent.values.push_back({concept_id, normalized});
-    else it->intensity = normalized;
-    return {};
-}
-
-Result<void> ValueSystem::erase(AgentPsychState& agent, ConceptId concept_id) const {
-    const auto before = agent.values.size();
-    agent.values.erase(std::remove_if(agent.values.begin(), agent.values.end(), [&](const ValueEntry& entry) {
-        return entry.concept_id == concept_id;
-    }), agent.values.end());
-    if (before == agent.values.size()) return make_error(ErrorCode::InvalidArgument, "value does not exist");
-    return {};
-}
-
-float ValueSystem::intensity(const AgentPsychState& agent, ConceptId concept_id) const noexcept {
-    const auto it = std::find_if(agent.values.begin(), agent.values.end(), [&](const ValueEntry& entry) {
-        return entry.concept_id == concept_id;
-    });
-    return it == agent.values.end() ? 0.0f : it->intensity;
-}
-
-} // namespace mspa
+#include <cmath>
+namespace mspa {Result<void> ValueSystem::set(AgentPsychState&a,ConceptId c,float v)const{if(!c.valid()||!std::isfinite(v))return make_error(ErrorCode::InvalidArgument,"invalid value");v=std::clamp(v,0.0f,1.0f);auto it=std::find_if(a.values.begin(),a.values.end(),[&](const auto&x){return x.concept_id==c;});if(it==a.values.end())a.values.push_back({c,v});else it->intensity=v;return {};}Result<void>ValueSystem::erase(AgentPsychState&a,ConceptId c)const{auto it=std::remove_if(a.values.begin(),a.values.end(),[&](const auto&x){return x.concept_id==c;});if(it==a.values.end())return make_error(ErrorCode::InvalidArgument,"value does not exist");a.values.erase(it,a.values.end());return {};}float ValueSystem::intensity(const AgentPsychState&a,ConceptId c)const noexcept{auto it=std::find_if(a.values.begin(),a.values.end(),[&](const auto&x){return x.concept_id==c;});return it==a.values.end()?0.0f:it->intensity;}}

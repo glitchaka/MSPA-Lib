@@ -1,190 +1,66 @@
 # MSPA Domain Pack Contract v0.1
 
-## Propósito
+> Contrato de datos para extender semántica sin introducir lógica específica del consumidor en el core.
 
-Un **Domain Pack** describe semántica psicológicamente relevante de un host sin introducir lógica específica de ese host dentro del núcleo MSPA.
+## 1. Metadata
 
-MSPA define el formato, lo valida y lo consume. Los Domain Packs concretos viven fuera del repositorio MSPA.
+Un pack declara:
 
-Este documento no contiene nombres, escenarios, entidades ni reglas de proyectos consumidores.
+```text
+PackId
+NamespaceId
+version_major/minor/patch
+min_mspa_major
+name
+dependencies[] (PackId + minimum major/minor)
+```
 
-## 1. Metadatos obligatorios
+La carga rechaza IDs/namespaces inválidos, versión mínima de MSPA incompatible, duplicados y dependencias ausentes o con versión insuficiente.
 
-Todo pack declara conceptualmente:
-- `pack_id`
-- versión
-- namespace
-- dependencias
-- compatibilidad
-- versión mínima de MSPA
-- recomendaciones de recursos.
+## 2. Vocabulario
 
-Las recomendaciones nunca elevan los límites impuestos por el runtime o el host.
-
-## 2. Vocabulario de dominio
-
-El pack registra conceptos y predicados que no pertenecen al vocabulario base MSPA.
-
-Todo identificador de dominio utiliza un namespace propio. Siempre que sea posible, puede mapear parte de su significado a categorías o predicados base MSPA.
+Puede declarar conceptos y tipos de acción. IDs son opacos al core; el significado específico pertenece al pack/consumidor.
 
 ## 3. Predicate Schemas
 
-Cada predicado interpretable declara:
-- roles;
-- cardinalidad;
-- rol con agencia;
-- posibles objetivos;
-- categorías de consecuencia;
-- categorías de relevancia;
-- intencionalidad posible;
-- mapeos a vocabulario base;
-- `ContextTags` relevantes;
-- `OutcomeTags` posibles;
-- pistas de appraisal.
+Cada schema puede declarar roles obligatorios/opcionales, agencia, targets, consequences, appraisal hints, conceptos relacionados, relevancia/consecuencia base e intencionalidad.
 
-El schema no fija una emoción ni una valoración universal.
+El schema describe semántica; no fija una emoción universal.
 
-## 4. Event Templates
+## 4. Action Schemas y consideraciones
 
-Un Event Template describe cómo un hecho del host se traduce a proposiciones y pistas semánticas.
+Una acción puede asociarse a una lista de consideraciones por ID. Cada consideración declara peso y curva lineal por tramos. El runtime evalúa sólo consideraciones disponibles/relevantes y mantiene la definición como datos.
 
-Puede declarar:
-- identificador de evento de dominio;
-- proposiciones producidas;
-- roles relevantes;
-- saliencia base;
-- información que el host debe completar;
-- Predicate Schemas involucrados.
+## 5. Inferencia
 
-El pack no decide quién percibió realmente el evento.
+Reglas declarativas expresan premisas `PredicateId + polaridad`, conclusión y certeza base. Son acotadas por budgets de inferencia y no ejecutan código arbitrario.
 
-## 5. Action Schemas
+## 6. Context/Outcome Tags
 
-Cada tipo de acción puede declarar:
-- `ActionTypeId`;
-- roles;
-- objetivo(s);
-- consideraciones psicológicas relevantes;
-- `ContextTags`;
-- posibles `OutcomeTags`;
-- riesgos/costes semánticos;
-- mapeos a categorías base.
+Los packs pueden declarar vocabulario de tags usado por aprendizaje:
 
-## 6. Consideraciones y curvas
+```text
+ActionType + ContextTags -> OutcomeTag
+```
 
-El pack puede declarar qué consideraciones usa cada acción y cómo transformar entradas normalizadas.
+## 7. Valores iniciales
 
-Las curvas deben ser:
-- serializables;
-- editables;
-- acotadas;
-- reproducibles;
-- preferiblemente lineales por tramos.
+`initial_values` declara `ConceptId + intensidad [0,1]`. Se almacenan como defaults del registry. El host decide si un `AgentInit` los aplica mediante `use_registry_default_values`.
 
-No se permite código arbitrario dentro de curvas.
+## 8. Snapshots
 
-## 7. Reglas de inferencia
+Aplicar un pack se realiza sobre `RegistryBuilder`. El snapshot activo no se muta. Sólo tras validación se publica un `RegistrySnapshot` nuevo.
 
-Las reglas deben ser declarativas y usar exclusivamente predicados autorizados.
+## 9. Seguridad
 
-Cada regla puede declarar:
-- condiciones;
-- hipótesis resultante;
-- certeza base;
-- dependencias;
-- prioridad/coste lógico;
-- categorías de evidencia.
+Un pack no puede:
+- ejecutar código nativo arbitrario;
+- acceder a filesystem/red desde reglas;
+- elevar cuotas del runtime/core;
+- introducir clases del host;
+- mutar un batch ya iniciado;
+- sobrescribir silenciosamente IDs de otro namespace/pack.
 
-No puede:
-- ejecutar código nativo;
-- acceder a filesystem o red;
-- crear recursión ilimitada;
-- exceder presupuestos definidos por MSPA.
+## 10. Ubicación
 
-## 8. Aprendizaje
-
-Para aprendizaje causal inicial, el pack declara por acción:
-- `ContextTags` permitidos;
-- `OutcomeTags` permitidos;
-- límite de combinaciones;
-- condiciones para registrar experiencia;
-- pesos iniciales opcionales.
-
-El runtime aprende estadísticas sobre combinaciones autorizadas, no sobre contexto arbitrario del mundo.
-
-## 9. Valores y normas iniciales
-
-Un pack puede ofrecer catálogos iniciales de:
-- valores;
-- normas personales;
-- normas sociales percibidas;
-- conceptos de prestigio;
-- prácticas conocidas.
-
-Esto no crea una cultura global. Sólo proporciona vocabulario y datos iniciales que el host puede usar al crear agentes.
-
-## 10. Influencia externa
-
-El pack puede registrar clases semánticas de influencia externa. No puede imponer obediencia ni resultados psicológicos predeterminados.
-
-## 11. Portabilidad
-
-Un pack debe declarar qué conceptos son:
-- portables;
-- locales al mundo;
-- resolubles por namespace;
-- opacos pero preservables.
-
-Las referencias externas pueden sobrevivir aunque no puedan resolverse localmente.
-
-## 12. Compatibilidad
-
-El pack permite comprobar:
-- misma versión;
-- versiones compatibles;
-- vocabulario compartido;
-- dependencias ausentes;
-- predicados desconocidos;
-- reglas no autorizadas.
-
-Una creencia importada no se elimina sólo porque el runtime receptor no comprenda uno de sus predicados; puede conservarse de forma opaca.
-
-## 13. Seguridad y presupuestos
-
-Todo pack externo se considera entrada no confiable.
-
-Se limitan:
-- cantidad de predicados;
-- Event Templates;
-- Action Schemas;
-- reglas de inferencia;
-- tamaño de reglas;
-- profundidad lógica;
-- `ContextTags`;
-- `OutcomeTags`;
-- curvas;
-- strings;
-- tamaño total.
-
-El pack nunca incluye código ejecutable arbitrario.
-
-## 14. Core Psychology Pack
-
-MSPA puede incluir semántica psicológica general:
-- vocabulario base;
-- rasgos base;
-- emociones base;
-- relaciones;
-- categorías generales de appraisal;
-- predicados sociales comunes;
-- inferencias mínimas genéricas;
-- consideraciones generales;
-- curvas de referencia.
-
-Ningún contenido del Core Psychology Pack debe depender de un host concreto.
-
-## 15. Invariante de separación
-
-Un Domain Pack concreto no forma parte del diseño normativo de MSPA ni del core. Debe poder desarrollarse, versionarse y distribuirse desde el proyecto consumidor.
-
-Si una integración requiere añadir al core nombres, clases, eventos o reglas propias del host, la frontera está mal definida y debe corregirse.
+MSPA-Lib contiene el **contrato y parser/estructuras de ejecución del pack**, no packs concretos de consumidores. Los packs concretos viven fuera del core.

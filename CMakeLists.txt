@@ -1,86 +1,71 @@
 cmake_minimum_required(VERSION 3.20)
-
-project(MSPA_Lib LANGUAGES CXX)
-
+project(MSPA_Lib VERSION 1.0.0 LANGUAGES C CXX)
 option(MSPA_BUILD_TESTS "Build MSPA tests" ON)
-
-add_library(mspa STATIC
-    src/base/rng.cpp
-    src/base/time.cpp
-    src/semantics/registry.cpp
-    src/semantics/inference.cpp
-    src/semantics/domain_pack.cpp
-    src/psychology/engine.cpp
-    src/psychology/beliefs.cpp
-    src/psychology/appraisal.cpp
-    src/psychology/emotions.cpp
-    src/psychology/goals.cpp
-    src/psychology/memory.cpp
-    src/psychology/relationships.cpp
-    src/psychology/learning.cpp
-    src/psychology/personality.cpp
-    src/psychology/values.cpp
-    src/psychology/mood.cpp
-    src/psychology/reappraisal.cpp
-    src/decision/decision.cpp
-    src/decision/hysteresis.cpp
-    src/decision/response_curve.cpp
-    src/decision/consideration.cpp
-    src/runtime/agent_store.cpp
-    src/runtime/runtime.cpp
-    src/persistence/state_transfer.cpp
-    src/validation/limits.cpp
-    src/diagnostics/trace.cpp
-)
-
+option(MSPA_BUILD_BENCHMARKS "Build MSPA microbenchmarks" OFF)
+option(MSPA_BUILD_SHARED "Build MSPA as shared library" OFF)
+option(MSPA_BUILD_FUZZ "Build libFuzzer target (Clang only)" OFF)
+set(MSPA_LIBRARY_TYPE STATIC)
+if(MSPA_BUILD_SHARED)
+  set(MSPA_LIBRARY_TYPE SHARED)
+endif()
+add_library(mspa ${MSPA_LIBRARY_TYPE}
+ src/base/rng.cpp src/base/time.cpp
+ src/semantics/registry.cpp src/semantics/inference.cpp src/semantics/domain_pack.cpp
+ src/psychology/personality.cpp src/psychology/values.cpp src/psychology/beliefs.cpp src/psychology/appraisal.cpp src/psychology/emotions.cpp src/psychology/mood.cpp src/psychology/goals.cpp src/psychology/memory.cpp src/psychology/relationships.cpp src/psychology/learning.cpp src/psychology/reappraisal.cpp src/psychology/engine.cpp
+ src/decision/response_curve.cpp src/decision/consideration.cpp src/decision/decision.cpp src/decision/hysteresis.cpp
+ src/runtime/agent_store.cpp src/runtime/runtime.cpp
+ src/persistence/state_transfer.cpp src/persistence/serialization.cpp
+ src/validation/limits.cpp src/diagnostics/trace.cpp src/c/c_api.cpp)
 add_library(MSPA::mspa ALIAS mspa)
-add_library(MSPA::base ALIAS mspa)
-
+if(MSPA_BUILD_SHARED AND WIN32)
+  set_target_properties(mspa PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS ON)
+endif()
 target_compile_features(mspa PUBLIC cxx_std_17)
-target_include_directories(mspa
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-)
-
+target_include_directories(mspa PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_compile_definitions(mspa PRIVATE MSPA_BUILDING_LIBRARY=1)
 if(MSVC)
-    target_compile_options(mspa PRIVATE /W4 /permissive- /fp:strict)
+ target_compile_options(mspa PRIVATE /W4 /permissive- /fp:strict)
 else()
-    target_compile_options(mspa PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+ target_compile_options(mspa PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+endif()
+include(GNUInstallDirs)
+include(CMakePackageConfigHelpers)
+configure_package_config_file(cmake/MSPAConfig.cmake.in ${CMAKE_CURRENT_BINARY_DIR}/MSPAConfig.cmake INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/MSPA)
+write_basic_package_version_file(${CMAKE_CURRENT_BINARY_DIR}/MSPAConfigVersion.cmake VERSION ${PROJECT_VERSION} COMPATIBILITY SameMajorVersion)
+install(TARGETS mspa EXPORT MSPATargets ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR} RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
+install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(EXPORT MSPATargets NAMESPACE MSPA:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/MSPA)
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/MSPAConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/MSPAConfigVersion.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/MSPA)
+if(MSPA_BUILD_TESTS)
+ enable_testing()
+ foreach(test_name IN ITEMS core semantics psychology runtime persistence c_api security)
+   add_executable(mspa_${test_name}_tests tests/${test_name}_tests.cpp)
+   target_compile_features(mspa_${test_name}_tests PRIVATE cxx_std_17)
+   target_link_libraries(mspa_${test_name}_tests PRIVATE MSPA::mspa)
+   if(MSVC)
+     target_compile_options(mspa_${test_name}_tests PRIVATE /W4 /permissive- /fp:strict)
+   else()
+     target_compile_options(mspa_${test_name}_tests PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+   endif()
+   add_test(NAME mspa_${test_name}_tests COMMAND mspa_${test_name}_tests)
+ endforeach()
+ add_executable(mspa_c_header_tests tests/c_header_tests.c)
+ set_target_properties(mspa_c_header_tests PROPERTIES LINKER_LANGUAGE CXX)
+ target_link_libraries(mspa_c_header_tests PRIVATE MSPA::mspa)
+ add_test(NAME mspa_c_header_tests COMMAND mspa_c_header_tests)
+endif()
+if(MSPA_BUILD_BENCHMARKS)
+ add_executable(mspa_benchmark benchmarks/benchmark.cpp)
+ target_compile_features(mspa_benchmark PRIVATE cxx_std_17)
+ target_link_libraries(mspa_benchmark PRIVATE MSPA::mspa)
 endif()
 
-if(MSPA_BUILD_TESTS)
-    enable_testing()
-
-    add_executable(mspa_base_tests tests/base_tests.cpp)
-    target_compile_features(mspa_base_tests PRIVATE cxx_std_17)
-    target_link_libraries(mspa_base_tests PRIVATE MSPA::mspa)
-
-    add_executable(mspa_runtime_tests tests/runtime_tests.cpp)
-    target_compile_features(mspa_runtime_tests PRIVATE cxx_std_17)
-    target_link_libraries(mspa_runtime_tests PRIVATE MSPA::mspa)
-
-    add_executable(mspa_api_surface_tests tests/api_surface_tests.cpp)
-    target_compile_features(mspa_api_surface_tests PRIVATE cxx_std_17)
-    target_link_libraries(mspa_api_surface_tests PRIVATE MSPA::mspa)
-
-    add_executable(mspa_review_regression_tests tests/review_regression_tests.cpp)
-    target_compile_features(mspa_review_regression_tests PRIVATE cxx_std_17)
-    target_link_libraries(mspa_review_regression_tests PRIVATE MSPA::mspa)
-
-    if(MSVC)
-        target_compile_options(mspa_base_tests PRIVATE /W4 /permissive- /fp:strict)
-        target_compile_options(mspa_runtime_tests PRIVATE /W4 /permissive- /fp:strict)
-        target_compile_options(mspa_api_surface_tests PRIVATE /W4 /permissive- /fp:strict)
-        target_compile_options(mspa_review_regression_tests PRIVATE /W4 /permissive- /fp:strict)
-    else()
-        target_compile_options(mspa_base_tests PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
-        target_compile_options(mspa_runtime_tests PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
-        target_compile_options(mspa_api_surface_tests PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
-        target_compile_options(mspa_review_regression_tests PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
-    endif()
-
-    add_test(NAME mspa_base_tests COMMAND mspa_base_tests)
-    add_test(NAME mspa_runtime_tests COMMAND mspa_runtime_tests)
-    add_test(NAME mspa_api_surface_tests COMMAND mspa_api_surface_tests)
-    add_test(NAME mspa_review_regression_tests COMMAND mspa_review_regression_tests)
+if(MSPA_BUILD_FUZZ)
+  if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
+    message(FATAL_ERROR "MSPA_BUILD_FUZZ requires Clang")
+  endif()
+  add_executable(mspa_deserialize_fuzz fuzz/deserialize_fuzz.cpp)
+  target_link_libraries(mspa_deserialize_fuzz PRIVATE MSPA::mspa)
+  target_compile_options(mspa_deserialize_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
+  target_link_options(mspa_deserialize_fuzz PRIVATE -fsanitize=fuzzer,address,undefined)
 endif()

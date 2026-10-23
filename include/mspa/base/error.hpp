@@ -5,7 +5,7 @@
 
 namespace mspa {
 
-enum class ErrorCode : std::uint16_t {
+enum class ErrorCode : std::uint32_t {
     None = 0,
     InvalidArgument,
     UnknownAgent,
@@ -19,16 +19,13 @@ enum class ErrorCode : std::uint16_t {
     BatchConflict,
     OutOfMemory,
     UnsupportedOperation,
+    SerializationError,
     InternalInvariantViolation
 };
 
 struct Error {
     ErrorCode code{ErrorCode::None};
     std::string details{};
-
-    [[nodiscard]] bool ok() const noexcept {
-        return code == ErrorCode::None;
-    }
 };
 
 } // namespace mspa

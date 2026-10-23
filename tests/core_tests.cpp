@@ -1,0 +1,4 @@
+#include "test.hpp"
+#include "mspa/mspa.hpp"
+using namespace mspa;
+int main(){WorldId w1(1),w2(2);AgentId a{w1,1},b{w2,1};require(a!=b,"world-scoped agent ids");auto t=convert_time_delta(PsychTime(60),TimeScale{60,1},TimeScale{120,1});require(t&&t.value_if()->ticks()==120,"rational time conversion");DeterministicRng r1(123),r2(123);for(int i=0;i<16;++i)require(r1.next_u64()==r2.next_u64(),"deterministic rng");require(derive_agent_seed(1,a,0)!=derive_agent_seed(1,b,0),"per-agent/world rng isolation");ResponseCurve c;require(c.set_points({{0,0},{0.5f,0.25f},{1,1}}),"curve set");require(c.evaluate(0.5f)==0.25f,"curve exact point");Personality p{};p.boldness=2.0f;require(PersonalitySystem{}.normalize(p),"personality normalize");require(p.boldness==1.0f,"personality clamp");AgentPsychState s{};s.id=a;ValueSystem v;require(v.set(s,ConceptId(1),0.7f),"value set");require(v.intensity(s,ConceptId(1))==0.7f,"value read");std::cout<<"core ok\n";}

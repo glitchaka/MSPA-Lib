@@ -1,28 +1,3 @@
 #include "mspa/decision/consideration.hpp"
-
-namespace mspa {
-
-Result<void> ConsiderationRegistry::add(ConsiderationDefinition definition) {
-    if (definition.id.empty()) return make_error(ErrorCode::InvalidArgument, "consideration id cannot be empty");
-    if (definitions_.find(definition.id) != definitions_.end()) {
-        return make_error(ErrorCode::InvalidArgument, "consideration id already exists");
-    }
-    definitions_.emplace(definition.id, std::move(definition));
-    return {};
-}
-
-Result<void> ConsiderationRegistry::remove(const std::string& id) {
-    if (definitions_.erase(id) == 0) return make_error(ErrorCode::InvalidArgument, "consideration does not exist");
-    return {};
-}
-
-void ConsiderationRegistry::clear() noexcept { definitions_.clear(); }
-
-const ConsiderationDefinition* ConsiderationRegistry::find(const std::string& id) const noexcept {
-    const auto it = definitions_.find(id);
-    return it == definitions_.end() ? nullptr : &it->second;
-}
-
-std::size_t ConsiderationRegistry::size() const noexcept { return definitions_.size(); }
-
-} // namespace mspa
+#include <cmath>
+namespace mspa {Result<void>ConsiderationRegistry::add(ConsiderationDefinition d){if(d.id.empty()||!std::isfinite(d.weight))return make_error(ErrorCode::InvalidArgument,"invalid consideration");if(definitions_.count(d.id))return make_error(ErrorCode::InvalidArgument,"duplicate consideration");definitions_.emplace(d.id,std::move(d));return {};}Result<void>ConsiderationRegistry::remove(const std::string&id){if(!definitions_.erase(id))return make_error(ErrorCode::InvalidArgument,"consideration not found");return {};}void ConsiderationRegistry::clear()noexcept{definitions_.clear();}const ConsiderationDefinition*ConsiderationRegistry::find(const std::string&id)const noexcept{auto it=definitions_.find(id);return it==definitions_.end()?nullptr:&it->second;}std::size_t ConsiderationRegistry::size()const noexcept{return definitions_.size();}}

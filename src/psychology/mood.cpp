@@ -1,27 +1,3 @@
 #include "mspa/psychology/mood.hpp"
-
 #include <algorithm>
-
-namespace mspa {
-
-void MoodSystem::update(AgentPsychState& agent, float valence_delta, float activation_delta, PsychTime now) const noexcept {
-    agent.mood.valence = std::clamp(agent.mood.valence + valence_delta, -1.0f, 1.0f);
-    agent.mood.activation = std::clamp(agent.mood.activation + activation_delta, 0.0f, 1.0f);
-    agent.mood.updated_at = now;
-}
-
-void MoodSystem::decay(AgentPsychState& agent, PsychTime now, float rate_per_tick) const noexcept {
-    if (now < agent.mood.updated_at) return;
-    const float amount = static_cast<float>(now.ticks() - agent.mood.updated_at.ticks()) * std::max(0.0f, rate_per_tick);
-    if (agent.mood.valence > 0.0f) agent.mood.valence = std::max(0.0f, agent.mood.valence - amount);
-    else agent.mood.valence = std::min(0.0f, agent.mood.valence + amount);
-    agent.mood.activation = std::max(0.0f, agent.mood.activation - amount);
-    agent.mood.updated_at = now;
-}
-
-void MoodSystem::reset(AgentPsychState& agent, PsychTime now) const noexcept {
-    agent.mood = MoodState{};
-    agent.mood.updated_at = now;
-}
-
-} // namespace mspa
+namespace mspa {void MoodSystem::update(AgentPsychState&a,float v,float act,PsychTime n)const noexcept{a.mood.valence=std::clamp(a.mood.valence+v,-1.0f,1.0f);a.mood.activation=std::clamp(a.mood.activation+act,0.0f,1.0f);a.mood.updated_at=n;}void MoodSystem::absorb_emotions(AgentPsychState&a,PsychTime n,float gain)const noexcept{float v=0,act=0;for(const auto&e:a.emotions){const float s=(e.kind==BasicEmotion::Joy?1.0f:-1.0f);v+=s*e.intensity;act+=e.intensity;}if(!a.emotions.empty()){v/=static_cast<float>(a.emotions.size());act/=static_cast<float>(a.emotions.size());}update(a,gain*v,gain*act,n);}void MoodSystem::decay(AgentPsychState&a,PsychTime n,float rate)const noexcept{if(n<a.mood.updated_at)return;float amount=static_cast<float>(n.ticks()-a.mood.updated_at.ticks())*std::max(0.0f,rate);if(a.mood.valence>0)a.mood.valence=std::max(0.0f,a.mood.valence-amount);else a.mood.valence=std::min(0.0f,a.mood.valence+amount);a.mood.activation=std::max(0.0f,a.mood.activation-amount);a.mood.updated_at=n;}void MoodSystem::reset(AgentPsychState&a,PsychTime n)const noexcept{a.mood={};a.mood.updated_at=n;}}

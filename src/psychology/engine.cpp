@@ -1,67 +1,12 @@
 #include "mspa/psychology/engine.hpp"
-
+#include "mspa/psychology/beliefs.hpp"
+#include "mspa/psychology/emotions.hpp"
+#include "mspa/psychology/memory.hpp"
+#include "mspa/psychology/mood.hpp"
+#include "mspa/semantics/inference.hpp"
 #include <algorithm>
-#include <set>
-
 namespace mspa {
-
-Result<bool> PsychologyEngine::observe(
-    AgentPsychState& agent,
-    const Proposition& proposition,
-    PsychTime process_time,
-    PsychTime event_time,
-    bool has_event_time,
-    const RegistrySnapshot& registry,
-    AppraisalResult* appraisal_out) const {
-
-    if (!agent.id.valid() || !proposition.predicate.valid()) {
-        return make_error(ErrorCode::InvalidArgument, "agent and predicate must be valid");
-    }
-    if (process_time < agent.last_processed_time) {
-        return make_error(ErrorCode::TimeRegression, "process_time regressed");
-    }
-
-    const auto* schema = registry.find(proposition.predicate);
-    if (schema) {
-        if (proposition.name_space != schema->name_space) {
-            return make_error(ErrorCode::InvalidArgument, "proposition namespace does not match predicate schema");
-        }
-
-        std::set<std::string> roles;
-        for (const auto& argument : proposition.arguments) {
-            if (argument.role.empty() || argument.value.empty()) {
-                return make_error(ErrorCode::InvalidArgument, "proposition arguments require non-empty role and value");
-            }
-            if (!roles.insert(argument.role).second) {
-                return make_error(ErrorCode::InvalidArgument, "proposition contains a duplicate role");
-            }
-        }
-        for (const auto& required : schema->required_roles) {
-            if (roles.find(required) == roles.end()) {
-                return make_error(ErrorCode::InvalidArgument, "proposition is missing a required role");
-            }
-        }
-    }
-
-    AppraisalResult appraisal{};
-    appraisal.relevance = schema ? 1.0f : 0.25f;
-    appraisal.consequence = proposition.positive ? 0.25f : -0.25f;
-    appraisal.control = 0.5f;
-    appraisal.norm_alignment = 0.0f;
-
-    BeliefState belief{};
-    belief.id = BeliefId(static_cast<std::uint64_t>(agent.beliefs.size() + 1));
-    belief.predicate = proposition.predicate;
-    belief.certainty = schema ? 0.75f : 0.4f;
-    belief.emotional_load = appraisal.consequence * appraisal.relevance;
-    belief.updated_at = has_event_time ? event_time : process_time;
-    agent.beliefs.push_back(belief);
-    agent.last_processed_time = process_time;
-
-    if (appraisal_out) {
-        *appraisal_out = appraisal;
-    }
-    return true;
+Result<bool>PsychologyEngine::observe(AgentPsychState&a,const Proposition&p,PsychTime process,PsychTime event,bool has_event,const RegistrySnapshot&r,AppraisalResult*out,const ObservePsychologyConfig&cfg)const{if(!a.id.valid())return make_error(ErrorCode::InvalidArgument,"invalid agent");if(process<a.last_processed_time)return make_error(ErrorCode::TimeRegression,"process_time regressed");auto valid=validate_proposition(p,r);if(!valid)return *valid.error_if();BeliefEvidence ev{};ev.proposition=p;ev.strength=cfg.perceived_certainty;ev.source_trust=cfg.source_trust;ev.source=cfg.source;ev.source_agent=cfg.source_agent;ev.observed_at=process;AppraisalContext ac{};ac.perceived_certainty=cfg.perceived_certainty;auto appraisal=AppraisalEngine{}.evaluate(a,p,r,ac);ev.emotional_load=appraisal.consequence*appraisal.relevance;if(a.beliefs.size()>=cfg.max_beliefs&&!BeliefSystem{}.find(a,p))return make_error(ErrorCode::QuotaExceeded,"belief quota exceeded");auto bu=BeliefSystem{}.update(a,ev);if(!bu)return *bu.error_if();EmotionSystem{}.apply(a,appraisal,process);MoodSystem{}.absorb_emotions(a,process);if(a.memories.size()>=cfg.max_memories)MemorySystem{}.compact(a,cfg.max_memories>0?cfg.max_memories-1:0);if(cfg.max_memories>0){auto m=MemorySystem{}.remember(a,p,std::clamp(0.3f+0.5f*appraisal.relevance+0.2f*std::abs(appraisal.consequence),0.0f,1.0f),has_event?event:process,ev.emotional_load,cfg.perceived_certainty,cfg.source);if(!m)return *m.error_if();}
+std::vector<Proposition>facts;facts.reserve(a.beliefs.size());for(const auto&b:a.beliefs)if(b.certainty>=0.5f)facts.push_back(b.proposition);InferenceBudget budget{cfg.inference_max_rules,cfg.inference_max_hypotheses,cfg.inference_max_depth};auto inferred=InferenceEngine::infer_registry_rules(facts,r,budget);if(!inferred)return *inferred.error_if();for(const auto&h:*inferred.value_if()){if(a.beliefs.size()>=cfg.max_beliefs)break;BeliefEvidence ie{};ie.proposition=h.proposition;ie.strength=h.certainty;ie.source_trust=1.0f;ie.source=BeliefSource::Inference;ie.observed_at=process;auto q=BeliefSystem{}.update(a,ie);if(!q)return *q.error_if();}
+a.last_processed_time=process;if(out)*out=appraisal;return true;}
 }
-
-} // namespace mspa
