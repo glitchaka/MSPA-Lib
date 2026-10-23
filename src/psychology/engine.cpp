@@ -1,6 +1,7 @@
 #include "mspa/psychology/engine.hpp"
 
 #include <algorithm>
+#include <set>
 
 namespace mspa {
 
@@ -21,6 +22,27 @@ Result<bool> PsychologyEngine::observe(
     }
 
     const auto* schema = registry.find(proposition.predicate);
+    if (schema) {
+        if (proposition.name_space != schema->name_space) {
+            return make_error(ErrorCode::InvalidArgument, "proposition namespace does not match predicate schema");
+        }
+
+        std::set<std::string> roles;
+        for (const auto& argument : proposition.arguments) {
+            if (argument.role.empty() || argument.value.empty()) {
+                return make_error(ErrorCode::InvalidArgument, "proposition arguments require non-empty role and value");
+            }
+            if (!roles.insert(argument.role).second) {
+                return make_error(ErrorCode::InvalidArgument, "proposition contains a duplicate role");
+            }
+        }
+        for (const auto& required : schema->required_roles) {
+            if (roles.find(required) == roles.end()) {
+                return make_error(ErrorCode::InvalidArgument, "proposition is missing a required role");
+            }
+        }
+    }
+
     AppraisalResult appraisal{};
     appraisal.relevance = schema ? 1.0f : 0.25f;
     appraisal.consequence = proposition.positive ? 0.25f : -0.25f;
