@@ -1,7 +1,6 @@
 #include "mspa/persistence/state_transfer.hpp"
 
 namespace mspa {
-
 namespace {
 
 Result<PsychTime> rebase_timestamp(PsychTime stamp, PsychTime exported_at, PsychTime import_time,
@@ -11,13 +10,10 @@ Result<PsychTime> rebase_timestamp(PsychTime stamp, PsychTime exported_at, Psych
     }
     const PsychTime age(exported_at.ticks() - stamp.ticks());
     auto converted = convert_time_delta(age, source, destination);
-    if (!converted) {
-        return *converted.error_if();
-    }
+    if (!converted) return *converted.error_if();
+
     const auto converted_ticks = converted.value_if()->ticks();
-    if (converted_ticks > import_time.ticks()) {
-        return PsychTime(0);
-    }
+    if (converted_ticks > import_time.ticks()) return PsychTime(0);
     return PsychTime(import_time.ticks() - converted_ticks);
 }
 
@@ -42,8 +38,10 @@ Result<ImportResult> import_agent_state(
     result.state.id = options.destination_id;
 
     if (options.time_policy == ImportTimePolicy::PreserveAbsolute) {
-        if (exported.origin_time_domain.id != destination_time_domain.id) {
-            return make_error(ErrorCode::VersionMismatch, "absolute time preservation requires the same time domain");
+        if (exported.origin_time_domain.id != destination_time_domain.id ||
+            exported.origin_time_domain.scale.ticks_per_second_num != destination_time_domain.scale.ticks_per_second_num ||
+            exported.origin_time_domain.scale.ticks_per_second_den != destination_time_domain.scale.ticks_per_second_den) {
+            return make_error(ErrorCode::VersionMismatch, "absolute time preservation requires the same compatible time domain");
         }
     } else if (options.time_policy == ImportTimePolicy::RejectIncompatible) {
         if (exported.origin_time_domain.id != destination_time_domain.id ||
@@ -52,23 +50,32 @@ Result<ImportResult> import_agent_state(
             return make_error(ErrorCode::VersionMismatch, "time domains are incompatible");
         }
     } else {
-        auto last = rebase_timestamp(result.state.last_processed_time, exported.exported_at, options.import_time,
-                                     exported.origin_time_domain.scale, destination_time_domain.scale);
+        auto rebase = [&](PsychTime& stamp) -> Result<void> {
+            auto converted = rebase_timestamp(stamp, exported.exported_at, options.import_time,
+                                              exported.origin_time_domain.scale,
+                                              destination_time_domain.scale);
+            if (!converted) return *converted.error_if();
+            stamp = *converted.value_if();
+            return {};
+        };
+
+        auto last = rebase(result.state.last_processed_time);
         if (!last) return *last.error_if();
-        result.state.last_processed_time = *last.value_if();
 
         for (auto& belief : result.state.beliefs) {
-            auto t = rebase_timestamp(belief.updated_at, exported.exported_at, options.import_time,
-                                      exported.origin_time_domain.scale, destination_time_domain.scale);
-            if (!t) return *t.error_if();
-            belief.updated_at = *t.value_if();
+            auto status = rebase(belief.updated_at);
+            if (!status) return *status.error_if();
         }
         for (auto& memory : result.state.memories) {
-            auto t = rebase_timestamp(memory.event_time, exported.exported_at, options.import_time,
-                                      exported.origin_time_domain.scale, destination_time_domain.scale);
-            if (!t) return *t.error_if();
-            memory.event_time = *t.value_if();
+            auto status = rebase(memory.event_time);
+            if (!status) return *status.error_if();
         }
+        for (auto& emotion : result.state.emotions) {
+            auto status = rebase(emotion.started_at);
+            if (!status) return *status.error_if();
+        }
+        auto mood = rebase(result.state.mood.updated_at);
+        if (!mood) return *mood.error_if();
     }
 
     if (options.rng_policy == RngImportPolicy::RekeyForDestination) {
