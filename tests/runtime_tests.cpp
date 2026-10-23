@@ -48,6 +48,7 @@ int main() {
     observation.agent = agent;
     observation.proposition.predicate = PredicateId(1);
     observation.proposition.name_space = NamespaceId(1);
+    observation.proposition.arguments.push_back({"actor", "agent:1"});
     observation.time.process_time = PsychTime(12);
     observation.time.has_event_time = true;
     observation.time.event_time = PsychTime(5);
