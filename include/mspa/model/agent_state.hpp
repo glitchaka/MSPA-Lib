@@ -55,6 +55,9 @@ struct MemoryState {
     MemoryId id{};
     PredicateId predicate{};
     float importance{0.0f};
+    float emotional_load{0.0f};
+    float certainty{1.0f};
+    std::uint32_t reactivations{0};
     PsychTime event_time{};
 };
 

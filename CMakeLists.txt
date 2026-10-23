@@ -8,6 +8,8 @@ add_library(mspa STATIC
     src/base/rng.cpp
     src/base/time.cpp
     src/semantics/registry.cpp
+    src/semantics/inference.cpp
+    src/semantics/domain_pack.cpp
     src/psychology/engine.cpp
     src/psychology/beliefs.cpp
     src/psychology/appraisal.cpp
@@ -16,8 +18,14 @@ add_library(mspa STATIC
     src/psychology/memory.cpp
     src/psychology/relationships.cpp
     src/psychology/learning.cpp
+    src/psychology/personality.cpp
+    src/psychology/values.cpp
+    src/psychology/mood.cpp
+    src/psychology/reappraisal.cpp
     src/decision/decision.cpp
     src/decision/hysteresis.cpp
+    src/decision/response_curve.cpp
+    src/decision/consideration.cpp
     src/runtime/agent_store.cpp
     src/runtime/runtime.cpp
     src/persistence/state_transfer.cpp
@@ -51,14 +59,21 @@ if(MSPA_BUILD_TESTS)
     target_compile_features(mspa_runtime_tests PRIVATE cxx_std_17)
     target_link_libraries(mspa_runtime_tests PRIVATE MSPA::mspa)
 
+    add_executable(mspa_api_surface_tests tests/api_surface_tests.cpp)
+    target_compile_features(mspa_api_surface_tests PRIVATE cxx_std_17)
+    target_link_libraries(mspa_api_surface_tests PRIVATE MSPA::mspa)
+
     if(MSVC)
         target_compile_options(mspa_base_tests PRIVATE /W4 /permissive- /fp:strict)
         target_compile_options(mspa_runtime_tests PRIVATE /W4 /permissive- /fp:strict)
+        target_compile_options(mspa_api_surface_tests PRIVATE /W4 /permissive- /fp:strict)
     else()
         target_compile_options(mspa_base_tests PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
         target_compile_options(mspa_runtime_tests PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
+        target_compile_options(mspa_api_surface_tests PRIVATE -Wall -Wextra -Wpedantic -ffp-contract=off)
     endif()
 
     add_test(NAME mspa_base_tests COMMAND mspa_base_tests)
     add_test(NAME mspa_runtime_tests COMMAND mspa_runtime_tests)
+    add_test(NAME mspa_api_surface_tests COMMAND mspa_api_surface_tests)
 endif()
