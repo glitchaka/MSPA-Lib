@@ -48,8 +48,12 @@ Result<std::unique_ptr<Runtime>> Runtime::create(RuntimeConfig config, RegistryS
 
 Result<void> Runtime::create_agent(AgentId id, const AgentInit& init, PsychTime process_time) noexcept {
     try {
-        if (!id.valid() || id.world != config_.world_id) return make_error(ErrorCode::InvalidArgument, "agent id must belong to runtime world");
-        if (agents_.size() >= config_.limits.max_agents) return make_error(ErrorCode::QuotaExceeded, "runtime agent limit reached");
+        if (!id.valid() || id.world != config_.world_id) {
+            return make_error(ErrorCode::InvalidArgument, "agent id must belong to runtime world");
+        }
+        if (agents_.size() >= config_.limits.max_agents) {
+            return make_error(ErrorCode::QuotaExceeded, "runtime agent limit reached");
+        }
 
         AgentPsychState state{};
         state.id = id;
@@ -60,8 +64,9 @@ Result<void> Runtime::create_agent(AgentId id, const AgentInit& init, PsychTime 
         state.memories = init.memories;
         state.relationships = init.relationships;
         state.last_processed_time = process_time;
-        if (init.use_custom_rng_state) state.rng_state = init.rng_state;
-        else {
+        if (init.use_custom_rng_state) {
+            state.rng_state = init.rng_state;
+        } else {
             DeterministicRng rng(derive_agent_seed(config_.seed_root, id, 0));
             state.rng_state = rng.state();
         }
@@ -78,7 +83,9 @@ Result<void> Runtime::create_agent(AgentId id, const AgentInit& init, PsychTime 
 
 Result<void> Runtime::create_agent_derived(AgentId id, const DerivedInit& derived, PsychTime process_time) noexcept {
     try {
-        if (derived.source_agents.empty()) return make_error(ErrorCode::InvalidArgument, "derived init requires at least one source agent");
+        if (derived.source_agents.empty()) {
+            return make_error(ErrorCode::InvalidArgument, "derived init requires at least one source agent");
+        }
         std::vector<const AgentPsychState*> sources;
         for (const auto source_id : derived.source_agents) {
             const auto* source = agents_.find(source_id);
@@ -101,8 +108,12 @@ Result<void> Runtime::create_agent_derived(AgentId id, const DerivedInit& derive
                 p.boldness += source->personality.boldness;
             }
             const float count = static_cast<float>(sources.size());
-            p.sociability /= count; p.stability /= count; p.empathy /= count;
-            p.persistence /= count; p.curiosity /= count; p.boldness /= count;
+            p.sociability /= count;
+            p.stability /= count;
+            p.empathy /= count;
+            p.persistence /= count;
+            p.curiosity /= count;
+            p.boldness /= count;
             init.personality = p;
         }
 
@@ -127,8 +138,12 @@ Result<void> Runtime::create_agent_derived(AgentId id, const DerivedInit& derive
                 const float delta = (unit * 2.0f - 1.0f) * derived.variation_strength;
                 value = clamp01(value + delta);
             };
-            vary(init.personality.sociability); vary(init.personality.stability); vary(init.personality.empathy);
-            vary(init.personality.persistence); vary(init.personality.curiosity); vary(init.personality.boldness);
+            vary(init.personality.sociability);
+            vary(init.personality.stability);
+            vary(init.personality.empathy);
+            vary(init.personality.persistence);
+            vary(init.personality.curiosity);
+            vary(init.personality.boldness);
         }
         return create_agent(id, init, process_time);
     } catch (const std::bad_alloc&) {
@@ -142,7 +157,9 @@ Result<void> Runtime::remove_agent(AgentId id, PsychTime process_time, RemovePol
     try {
         auto* state = agents_.find(id);
         if (!state) return make_error(ErrorCode::UnknownAgent, "agent does not exist");
-        if (process_time < state->last_processed_time) return make_error(ErrorCode::TimeRegression, "remove process_time regressed");
+        if (process_time < state->last_processed_time) {
+            return make_error(ErrorCode::TimeRegression, "remove process_time regressed");
+        }
         if (policy == RemovePolicy::ValidateNoReferences) {
             return make_error(ErrorCode::UnsupportedOperation, "reference graph validation is not implemented yet");
         }
@@ -154,12 +171,17 @@ Result<void> Runtime::remove_agent(AgentId id, PsychTime process_time, RemovePol
     }
 }
 
-bool Runtime::has_agent(AgentId id) const noexcept { return agents_.contains(id); }
+bool Runtime::has_agent(AgentId id) const noexcept {
+    return agents_.contains(id);
+}
 
 Result<ObserveResult> Runtime::observe(const ObserveInput& input) noexcept {
     try {
         auto* state = agents_.find(input.agent);
         if (!state) return make_error(ErrorCode::UnknownAgent, "agent does not exist");
+        if (state->beliefs.size() >= config_.limits.max_beliefs_per_agent) {
+            return make_error(ErrorCode::QuotaExceeded, "belief limit reached for agent");
+        }
 
         AppraisalResult appraisal{};
         auto changed = psychology_.observe(*state, input.proposition, input.time.process_time,
@@ -194,19 +216,28 @@ Result<ObserveResult> Runtime::observe(const ObserveInput& input) noexcept {
 }
 
 Result<Decision> Runtime::decide(AgentId agent, const std::vector<ActionOption>& actions,
-                                 PsychTime process_time, ActionContinuityKey current) noexcept {
+                                 PsychTime process_time, ActionContinuityKey current,
+                                 const DecisionContext& context) noexcept {
     try {
         auto* state = agents_.find(agent);
         if (!state) return make_error(ErrorCode::UnknownAgent, "agent does not exist");
-        if (process_time < state->last_processed_time) return make_error(ErrorCode::TimeRegression, "decide process_time regressed");
+        if (process_time < state->last_processed_time) {
+            return make_error(ErrorCode::TimeRegression, "decide process_time regressed");
+        }
 
         Decision decision{};
         float best = 0.0f;
         bool first = true;
         for (const auto& action : actions) {
-            if (action.actor != agent) return make_error(ErrorCode::InvalidArgument, "action actor does not match deciding agent");
-            auto score = utility_.score(action);
-            if (current.valid() && action.continuity == current) score.utility += 0.01f;
+            if (action.actor != agent) {
+                return make_error(ErrorCode::InvalidArgument, "action actor does not match deciding agent");
+            }
+            auto score = utility_.score(action, *state, context);
+            const float continuity = hysteresis_.continuity_bonus(*state, action, current);
+            if (continuity != 0.0f) {
+                score.considerations.push_back({"continuity/hysteresis", action.progress, continuity});
+                score.utility += continuity;
+            }
             decision.trace.push_back(score);
             if (first || score.utility > best) {
                 first = false;
@@ -216,13 +247,17 @@ Result<Decision> Runtime::decide(AgentId agent, const std::vector<ActionOption>&
                 decision.selected_target = action.targets.empty() ? AgentId{} : action.targets.front();
             }
         }
+
         state->last_processed_time = process_time;
         state->current_intent = ActionContinuityKey{};
         if (decision.has_selection) {
-            const auto it = std::find_if(actions.begin(), actions.end(), [&](const ActionOption& a) { return a.instance == decision.selected_action; });
+            const auto it = std::find_if(actions.begin(), actions.end(),
+                                         [&](const ActionOption& action) {
+                                             return action.instance == decision.selected_action;
+                                         });
             if (it != actions.end()) state->current_intent = it->continuity;
         }
-        decision.confidence = decision.has_selection ? 1.0f : 0.0f;
+        decision.confidence = decision.has_selection ? clamp01(0.5f + std::max(0.0f, best) * 0.1f) : 0.0f;
 
         if (config_.diagnostics_enabled) {
             DiagnosticTrace trace{};
@@ -243,12 +278,17 @@ Result<void> Runtime::report(const ReportInput& input) noexcept {
     try {
         auto* state = agents_.find(input.agent);
         if (!state) return make_error(ErrorCode::UnknownAgent, "agent does not exist");
-        if (input.process_time < state->last_processed_time) return make_error(ErrorCode::TimeRegression, "report process_time regressed");
+        if (input.process_time < state->last_processed_time) {
+            return make_error(ErrorCode::TimeRegression, "report process_time regressed");
+        }
 
         auto it = std::find_if(state->learned_expectations.begin(), state->learned_expectations.end(),
-                               [&](const LearnedExpectation& e) { return e.action == input.action_type; });
-        if (it == state->learned_expectations.end()) state->learned_expectations.push_back({input.action_type, 1u, input.success ? 1u : 0u, 0.5f});
-        else {
+                               [&](const LearnedExpectation& expectation) {
+                                   return expectation.action == input.action_type;
+                               });
+        if (it == state->learned_expectations.end()) {
+            state->learned_expectations.push_back({input.action_type, 1u, input.success ? 1u : 0u, 0.5f});
+        } else {
             ++it->attempts;
             if (input.success) ++it->successes;
             it->confidence = static_cast<float>(it->successes) / static_cast<float>(it->attempts);
@@ -266,7 +306,9 @@ Result<AdvanceResult> Runtime::advance_to(AgentId agent, PsychTime target_time) 
     try {
         auto* state = agents_.find(agent);
         if (!state) return make_error(ErrorCode::UnknownAgent, "agent does not exist");
-        if (target_time < state->last_processed_time) return make_error(ErrorCode::TimeRegression, "advance target_time regressed");
+        if (target_time < state->last_processed_time) {
+            return make_error(ErrorCode::TimeRegression, "advance target_time regressed");
+        }
         const bool changed = target_time != state->last_processed_time;
         state->last_processed_time = target_time;
         return AdvanceResult{changed, false};
@@ -280,7 +322,9 @@ Result<AdvanceResult> Runtime::advance_to(AgentId agent, PsychTime target_time) 
 Result<ReactResult> Runtime::react(const ReactInput& input) noexcept {
     auto observed = observe(input.observation);
     if (!observed) return *observed.error_if();
-    auto decision = decide(input.observation.agent, input.actions, input.observation.time.process_time, input.current_action);
+    auto decision = decide(input.observation.agent, input.actions,
+                           input.observation.time.process_time, input.current_action,
+                           input.decision_context);
     if (!decision) return *decision.error_if();
     return ReactResult{*observed.value_if(), *decision.value_if()};
 }
@@ -304,7 +348,7 @@ Result<std::vector<DecideBatchOutput>> Runtime::decide_batch(std::vector<DecideB
     std::vector<DecideBatchOutput> out;
     out.reserve(items.size());
     for (const auto& item : items) {
-        auto result = decide(item.agent, item.actions, item.process_time, item.current);
+        auto result = decide(item.agent, item.actions, item.process_time, item.current, item.context);
         if (!result) return *result.error_if();
         out.push_back({item.input_sequence, item.agent, *result.value_if()});
     }
@@ -341,7 +385,9 @@ Result<ExportedAgent> Runtime::export_agent(AgentId id, PsychTime exported_at) c
     try {
         const auto* state = agents_.find(id);
         if (!state) return make_error(ErrorCode::UnknownAgent, "agent does not exist");
-        if (exported_at < state->last_processed_time) return make_error(ErrorCode::TimeRegression, "exported_at precedes agent state");
+        if (exported_at < state->last_processed_time) {
+            return make_error(ErrorCode::TimeRegression, "exported_at precedes agent state");
+        }
         return ExportedAgent{*state, config_.time_domain, exported_at};
     } catch (const std::bad_alloc&) {
         return make_error(ErrorCode::OutOfMemory, "export allocation failed");
@@ -352,8 +398,12 @@ Result<ExportedAgent> Runtime::export_agent(AgentId id, PsychTime exported_at) c
 
 Result<ImportResult> Runtime::import_agent(const ExportedAgent& exported, const ImportOptions& options) noexcept {
     try {
-        if (options.destination_id.world != config_.world_id) return make_error(ErrorCode::InvalidArgument, "destination agent must belong to runtime world");
-        if (agents_.size() >= config_.limits.max_agents) return make_error(ErrorCode::QuotaExceeded, "runtime agent limit reached");
+        if (options.destination_id.world != config_.world_id) {
+            return make_error(ErrorCode::InvalidArgument, "destination agent must belong to runtime world");
+        }
+        if (agents_.size() >= config_.limits.max_agents) {
+            return make_error(ErrorCode::QuotaExceeded, "runtime agent limit reached");
+        }
         auto imported = import_agent_state(exported, config_.time_domain, options);
         if (!imported) return *imported.error_if();
         auto valid = validate_agent_state(imported.value_if()->state, config_.limits);
@@ -406,8 +456,13 @@ Result<void> Runtime::publish_registry() noexcept {
     }
 }
 
-void Runtime::discard_registry_staging() noexcept { registry_staging_.reset(); }
-bool Runtime::has_registry_staging() const noexcept { return static_cast<bool>(registry_staging_); }
+void Runtime::discard_registry_staging() noexcept {
+    registry_staging_.reset();
+}
+
+bool Runtime::has_registry_staging() const noexcept {
+    return static_cast<bool>(registry_staging_);
+}
 
 const RuntimeConfig& Runtime::config() const noexcept { return config_; }
 const RegistrySnapshot& Runtime::registry() const noexcept { return registry_; }
