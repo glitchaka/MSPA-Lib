@@ -55,40 +55,85 @@ jobs:
           name: mspa-fuzz-evidence
           path: audit-fuzz.log
 
-  mutation-hysteresis:
+  mutation-coverage:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mutation: [hysteresis, baseline, rebase, quotas, canonical_order, reappraisal]
     steps:
       - uses: actions/checkout@v4
       - name: Configure mutation build
         run: cmake -S . -B build-mutant -DMSPA_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
-      - name: Build behavioral acceptance test
-        run: cmake --build build-mutant --target mspa_audit_behavior_tests --parallel 2
-      - name: Confirm original passes
-        run: ./build-mutant/mspa_audit_behavior_tests
-      - name: Disable hysteresis deliberately
+      - name: Build phase 2 public API tests
+        run: cmake --build build-mutant --parallel 2
+      - name: Confirm originals pass
         shell: bash
         run: |
-          cat > src/decision/hysteresis.cpp <<'EOF'
-          #include "mspa/decision/hysteresis.hpp"
-          namespace mspa {
-          float HysteresisPolicy::continuity_bonus(const AgentPsychState&,const ActionOption&,ActionContinuityKey,float)const noexcept{return 0.0f;}
-          float HysteresisPolicy::switch_threshold(const AgentPsychState&,const ActionOption&,float)const noexcept{return 0.0f;}
-          }
-          EOF
-      - name: Mutation must be killed by tests
+          ./build-mutant/mspa_audit_phase2_behavior_tests
+          ./build-mutant/mspa_audit_phase2_system_tests
+      - name: Apply deliberate regression
         shell: bash
+        env:
+          MUTATION: ${{ matrix.mutation }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          mutation = os.environ["MUTATION"]
+
+          def replace(path, old, new):
+              p = Path(path)
+              text = p.read_text()
+              if old not in text:
+                  raise SystemExit(f"mutation pattern not found: {mutation}: {path}")
+              p.write_text(text.replace(old, new))
+
+          if mutation == "hysteresis":
+              Path("src/decision/hysteresis.cpp").write_text('''#include "mspa/decision/hysteresis.hpp"\nnamespace mspa {\nfloat HysteresisPolicy::continuity_bonus(const AgentPsychState&,const ActionOption&,ActionContinuityKey,float)const noexcept{return 0.0f;}\nfloat HysteresisPolicy::switch_threshold(const AgentPsychState&,const ActionOption&,float)const noexcept{return 0.0f;}\n}\n''')
+          elif mutation == "baseline":
+              replace("src/psychology/emotions.cpp",
+                      "float clamp_baseline(float x){return std::clamp(x,active_emotion_floor,0.15f);}",
+                      "float clamp_baseline(float){return 0.0f;}")
+          elif mutation == "rebase":
+              replace("src/persistence/state_transfer.cpp",
+                      "e.origin_time_domain.scale,dest.scale",
+                      "e.origin_time_domain.scale,e.origin_time_domain.scale")
+          elif mutation == "quotas":
+              replace("src/validation/limits.cpp",
+                      "s.memories.size()>l.max_memories_per_agent||",
+                      "false||")
+          elif mutation == "canonical_order":
+              replace("src/runtime/runtime.cpp", "return aa<bb", "return bb<aa")
+          elif mutation == "reappraisal":
+              replace("src/psychology/reappraisal.cpp",
+                      "it->certainty=std::clamp(c,0.0f,1.0f);return {};",
+                      "it->certainty=std::clamp(c,0.0f,1.0f);it->proposition.positive=!it->proposition.positive;return {};")
+          else:
+              raise SystemExit(f"unknown mutation: {mutation}")
+          PY
+      - name: Mutation must be killed by public API tests
+        shell: bash
+        env:
+          MUTATION: ${{ matrix.mutation }}
         run: |
           set -o pipefail
-          cmake --build build-mutant --target mspa_audit_behavior_tests --parallel 2
-          if ./build-mutant/mspa_audit_behavior_tests > audit-mutation.log 2>&1; then
-            cat audit-mutation.log
-            echo "FAIL: disabled hysteresis survived the acceptance suite"
+          cmake --build build-mutant --parallel 2
+          case "$MUTATION" in
+            rebase|quotas|canonical_order) TEST=./build-mutant/mspa_audit_phase2_system_tests ;;
+            *) TEST=./build-mutant/mspa_audit_phase2_behavior_tests ;;
+          esac
+          LOG="audit-mutation-${MUTATION}.log"
+          if "$TEST" > "$LOG" 2>&1; then
+            cat "$LOG"
+            echo "FAIL: mutation survived: $MUTATION"
             exit 1
           else
-            cat audit-mutation.log
-            echo "MUTATION_KILLED: hysteresis regression was detected"
+            cat "$LOG"
+            echo "MUTATION_KILLED: $MUTATION"
           fi
       - uses: actions/upload-artifact@v4
         with:
-          name: mspa-mutation-evidence
-          path: audit-mutation.log
+          name: mspa-mutation-${{ matrix.mutation }}
+          path: audit-mutation-${{ matrix.mutation }}.log

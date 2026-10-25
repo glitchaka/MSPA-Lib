@@ -53,6 +53,10 @@ std::string expressed_episode(const AgentPsychState& state){
     }
     return selected&&strongest>=0.05f?emotion_name(selected->kind):std::string{};
 }
+Result<void> validate_external_string(const std::string& value,const RuntimeLimits& limits,const char* detail){
+    if(value.size()>limits.max_string_bytes)return make_error(ErrorCode::QuotaExceeded,detail);
+    return {};
+}
 }
 
 Runtime::Runtime(RuntimeConfig c,RegistrySnapshot r):config_(std::move(c)),registry_(std::move(r)),diagnostics_(config_.limits.max_diagnostics){}
@@ -117,7 +121,8 @@ Result<void> Runtime::create_agent_derived(AgentId id,const DerivedInit& d,Psych
 
 bool Runtime::referenced_by_other(AgentId id) const noexcept{
     for(const auto& kv:agents_.all()){
-        if(kv.first==id)continue;const auto& s=kv.second;
+        if(kv.first==id)continue;
+        const auto& s=kv.second;
         for(const auto& r:s.relationships)if(r.other==id)return true;
         auto prop_ref=[&](const Proposition& p){for(const auto& a:p.arguments)if(a.has_agent&&a.agent==id)return true;return false;};
         for(const auto& b:s.beliefs)if(prop_ref(b.proposition))return true;
@@ -141,6 +146,7 @@ bool Runtime::has_agent(AgentId id) const noexcept{return agents_.contains(id);}
 Result<ObserveResult> Runtime::observe(const ObserveInput& i) noexcept{
     try{
         auto* s=agents_.find(i.agent);if(!s)return make_error(ErrorCode::UnknownAgent,"agent does not exist");
+        auto deep=validate_proposition_deep(i.proposition,config_.limits);if(!deep)return *deep.error_if();
         ObservePsychologyConfig pc{};pc.max_beliefs=config_.limits.max_beliefs_per_agent;pc.max_memories=config_.limits.max_memories_per_agent;pc.perceived_certainty=i.perceived_certainty;pc.source_trust=i.source_trust;pc.source=i.source;pc.source_agent=i.source_agent;
         AppraisalResult a{};auto changed=psychology_.observe(*s,i.proposition,i.time.process_time,i.time.event_time,i.time.has_event_time,registry_,&a,pc);if(!changed)return *changed.error_if();
         ObserveResult o{};o.state_changed=*changed.value_if();o.decision_recommended=a.relevance>=0.45f;o.urgency=a.relevance>=0.9f&&a.consequence<-0.5f?Urgency::Immediate:a.relevance>=0.75f?Urgency::Soon:a.relevance>0.15f?Urgency::Normal:Urgency::None;o.current_action_threatened=a.consequence<-0.5f&&a.relevance>0.5f;
@@ -156,6 +162,12 @@ Result<Decision> Runtime::decide(AgentId id,const std::vector<ActionOption>& opt
     try{
         auto* s=agents_.find(id);if(!s)return make_error(ErrorCode::UnknownAgent,"agent does not exist");
         if(now<s->last_processed_time)return make_error(ErrorCode::TimeRegression,"decide time regressed");
+        for(const auto& option:opts){
+            for(const auto& tag:option.context_tags){auto valid=validate_external_string(tag,config_.limits,"action context tag quota exceeded");if(!valid)return *valid.error_if();}
+            for(const auto& effect:option.expected_effects){auto valid=validate_external_string(effect.outcome_tag,config_.limits,"action outcome tag quota exceeded");if(!valid)return *valid.error_if();}
+            for(const auto& signal:option.signals){auto valid=validate_external_string(signal.first,config_.limits,"action signal name quota exceeded");if(!valid)return *valid.error_if();}
+        }
+        for(const auto& signal:ctx.signals){auto valid=validate_external_string(signal.first,config_.limits,"decision signal name quota exceeded");if(!valid)return *valid.error_if();}
         Decision d{};if(opts.empty()){s->last_processed_time=now;s->current_intent={};return d;}
         const ActionContinuityKey effective=current.valid()?current:s->current_intent;HysteresisPolicy hp;
         float best=-3.4e38f,second=-3.4e38f;const ActionOption* best_opt=nullptr;
@@ -188,6 +200,9 @@ Result<void> Runtime::report(const ReportInput& i) noexcept{
     try{
         auto* s=agents_.find(i.agent);if(!s)return make_error(ErrorCode::UnknownAgent,"agent does not exist");
         if(i.process_time<s->last_processed_time)return make_error(ErrorCode::TimeRegression,"report time regressed");
+        for(const auto& tag:i.context_tags){auto valid=validate_external_string(tag,config_.limits,"report context tag quota exceeded");if(!valid)return *valid.error_if();}
+        for(const auto& tag:i.outcome_tags){auto valid=validate_external_string(tag,config_.limits,"report outcome tag quota exceeded");if(!valid)return *valid.error_if();}
+        for(const auto& p:i.resulting_propositions){auto valid=validate_proposition_deep(p,config_.limits);if(!valid)return *valid.error_if();}
         LearningReport lr{};lr.action=i.action_type;lr.context_tags=i.context_tags;lr.outcome_tags=i.outcome_tags;lr.success=i.success;lr.now=i.process_time;
         auto q=LearningSystem{}.report(*s,lr,config_.limits.max_learning_patterns_per_agent);if(!q)return *q.error_if();
         for(const auto& ri:i.relationship_impacts){q=RelationshipSystem{}.adjust(*s,ri.target,ri.delta);if(!q)return *q.error_if();}
