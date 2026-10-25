@@ -94,7 +94,7 @@ jobs:
               Path("src/decision/hysteresis.cpp").write_text('''#include "mspa/decision/hysteresis.hpp"\nnamespace mspa {\nfloat HysteresisPolicy::continuity_bonus(const AgentPsychState&,const ActionOption&,ActionContinuityKey,float)const noexcept{return 0.0f;}\nfloat HysteresisPolicy::switch_threshold(const AgentPsychState&,const ActionOption&,float)const noexcept{return 0.0f;}\n}\n''')
           elif mutation == "baseline":
               replace("src/psychology/emotions.cpp",
-                      "float clamp_baseline(float x){return std::clamp(x,active_emotion_floor,0.15f);}",
+                      "float clamp_baseline(float value){return std::clamp(value,active_emotion_floor,0.15f);}",
                       "float clamp_baseline(float){return 0.0f;}")
           elif mutation == "rebase":
               replace("src/persistence/state_transfer.cpp",
