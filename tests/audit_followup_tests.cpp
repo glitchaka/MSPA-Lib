@@ -245,7 +245,7 @@ void test_decay_speed() {
         if (k >= n1.ticks.size()) continue;
         AgentId id{WorldId(1), local++};
         make_fearful_agent(*r, id, neutral, 0);
-        require(r.advance_to(id, PsychTime(n1.ticks[k])), "single-jump advance");
+        require(r->advance_to(id, PsychTime(n1.ticks[k])), "single-jump advance");
         require(std::fabs(fear_now(*r, id) - n1.fear[k]) < 1.0e-3f,
                 "stepwise and single-jump advance must agree (lazy decay must be path independent)");
     }
