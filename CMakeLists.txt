@@ -38,7 +38,7 @@ install(EXPORT MSPATargets NAMESPACE MSPA:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/MSPAConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/MSPAConfigVersion.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/MSPA)
 if(MSPA_BUILD_TESTS)
  enable_testing()
- foreach(test_name IN ITEMS core semantics psychology profiles emotion_baseline runtime persistence c_api security audit_determinism audit_behavior audit_security_time audit_trace_scenario audit_phase2_behavior audit_phase2_system audit_phase2_c_abi)
+ foreach(test_name IN ITEMS core semantics psychology profiles emotion_baseline runtime persistence c_api security audit_determinism audit_behavior audit_security_time audit_trace_scenario audit_phase2_behavior audit_phase2_system audit_phase2_c_abi audit_followup)
    add_executable(mspa_${test_name}_tests tests/${test_name}_tests.cpp)
    target_compile_features(mspa_${test_name}_tests PRIVATE cxx_std_17)
    target_link_libraries(mspa_${test_name}_tests PRIVATE MSPA::mspa)
