@@ -11,14 +11,19 @@ Este README es **autocontenido**: contiene el contrato técnico necesario para i
 
 ## Estado
 
-La implementación **v1.0.0** cubre el alcance definido para el núcleo de MSPA:
+La implementación actual es **v1.1.1**.
+
+El núcleo cubre:
 
 - runtime multi-instancia;
 - lifecycle de agentes;
 - semántica estructurada y `RegistrySnapshot`;
 - Domain Packs versionados y con dependencias;
 - inferencia declarativa acotada;
-- personalidad, valores, creencias, appraisal, emociones, ánimo, metas, memoria y relaciones;
+- personalidad, perfiles psicológicos extensibles, valores, creencias, appraisal, emociones, ánimo, metas, memoria y relaciones;
+- perfiles definidos por el host mediante `PsychologicalProfile`, `ProfileRegistry` y `ProfileRecipe`, sin presets rígidos dentro del core;
+- composición ponderada y variación determinista de perfiles por agente;
+- baseline emocional tónico para las seis emociones base: un agente activo nunca decae a un estado emocional totalmente nulo;
 - aprendizaje causal contextual;
 - Utility AI psicológica e histéresis;
 - `OBSERVE`, `DECIDE`, `REPORT`, `ADVANCE_TO`, `REACT` y sus formas batch;
@@ -29,6 +34,12 @@ La implementación **v1.0.0** cubre el alcance definido para el núcleo de MSPA:
 - diagnostics explicables;
 - API C++ y ABI C;
 - build estático/compartido, instalación CMake, tests, benchmark y harness de fuzzing.
+
+### Cambios 1.1.x
+
+**1.1.0** añade perfiles psicológicos extensibles definidos por el host. MSPA no incluye perfiles de juego ni personajes concretos: el consumidor registra cuantos perfiles necesite, puede combinarlos mediante pesos y aplicar variación determinista por agente.
+
+**1.1.1** añade el invariante de baseline emocional: todo agente activo mantiene las seis emociones base presentes y con intensidad mayor que cero. El decaimiento vuelve al nivel tónico derivado de personalidad y mood; ya no elimina las emociones al llegar a cero.
 
 Lo que **no pertenece al alcance de MSPA** es intencional: física, pathfinding, animación, inventario, combate, percepción física, persistencia del mundo, scheduling del host y adaptadores específicos de juegos/motores. Esas capas viven fuera de este repositorio.
 
@@ -77,13 +88,15 @@ El host posee:
 - resultados reales de acciones;
 - scheduling y threads del mundo;
 - almacenamiento/transportes de bytes;
-- semántica específica del consumidor.
+- semántica específica del consumidor;
+- perfiles psicológicos concretos de sus personajes/agentes.
 
 ## Autoridad de MSPA
 
 MSPA posee:
 
 - personalidad;
+- infraestructura de perfiles psicológicos;
 - valores;
 - creencias subjetivas;
 - inferencia declarativa;
@@ -170,7 +183,7 @@ include/mspa/
 ├── base/                     IDs, Result, errores, RNG, tiempo, versión
 ├── model/                    AgentPsychState
 ├── semantics/                proposiciones, registry, inferencia, Domain Packs
-├── psychology/               subsistemas psicológicos
+├── psychology/               personalidad, perfiles y subsistemas psicológicos
 ├── decision/                 Utility AI, curvas, consideraciones, histéresis
 ├── runtime/                  Runtime y AgentStore
 ├── persistence/              transferencia y serialización
@@ -202,7 +215,7 @@ docs/                         copias normativas por área
 
 # 4. Identidad y aislamiento
 
-Los identificadores son tipos fuertes (`RuntimeId`, `WorldId`, `NamespaceId`, `ConceptId`, `PredicateId`, `GoalId`, `BeliefId`, `MemoryId`, `ActionTypeId`, `ActionInstanceId`, `ActionContinuityKey`, `PackId`, `TimeDomainId`, etc.).
+Los identificadores son tipos fuertes (`RuntimeId`, `WorldId`, `NamespaceId`, `ConceptId`, `PredicateId`, `GoalId`, `BeliefId`, `MemoryId`, `ActionTypeId`, `ActionInstanceId`, `ActionContinuityKey`, `PackId`, `ProfileId`, `TimeDomainId`, etc.).
 
 `AgentId` incluye el mundo:
 
@@ -298,6 +311,25 @@ Seis ejes normalizados `[0,1]`:
 - audacia.
 
 De ellos se derivan sensibilidades como rigidez de creencias, persistencia de metas, resistencia al cambio, sensibilidad a amenaza, sensibilidad social y exploración. La personalidad **modula** cálculos; no se usa como una tabla rígida de “acción + puntos”.
+
+## Perfiles psicológicos
+
+Los perfiles son datos reutilizables definidos por el host. MSPA no impone presets propios.
+
+`PsychologicalProfile` puede contener:
+
+- `ProfileId`;
+- nombre y descripción;
+- personalidad base;
+- valores iniciales;
+- mood basal;
+- semillas de metas.
+
+`ProfileRegistry` permite registrar, eliminar, consultar y enumerar tantos perfiles como necesite el consumidor. No existe un límite conceptual de tres perfiles.
+
+`ProfileRecipe` permite combinar varios perfiles mediante pesos. La resolución produce un `ResolvedProfile`; opcionalmente puede aplicar variación determinista por agente mediante `variation_seed` y `variation_strength`.
+
+La personalidad concreta de un agente se materializa al crearlo; después su estado psicológico continúa evolucionando individualmente. El perfil no sustituye memoria, aprendizaje, relaciones, emociones o experiencias propias del agente.
 
 ## Valores
 
@@ -468,7 +500,15 @@ Emociones básicas implementadas:
 - `Anxiety`;
 - `Aversion`.
 
-`EmotionSystem` fusiona activaciones compatibles y aplica decaimiento temporal. `MoodSystem` mantiene valencia/activación, absorbe afecto y decae de manera perezosa con `ADVANCE_TO`.
+## Baseline emocional 1.1.1
+
+Todo `AgentPsychState` activo mantiene las seis emociones base presentes. `active_emotion_floor` establece un mínimo absoluto del 1%, mientras que `EmotionSystem::baseline()` calcula un nivel tónico mayor o igual a ese piso utilizando personalidad y mood.
+
+`EmotionSystem::ensure_baseline()` materializa las seis emociones cuando un agente entra al `AgentStore` o cuando se procesa su estado. `EmotionSystem::decay()` reduce activaciones hacia el baseline correspondiente, pero no elimina la emoción ni permite que caiga a cero.
+
+Un agente eliminado del runtime deja de tener estado psicológico; el invariante se aplica exclusivamente a agentes activos.
+
+`MoodSystem` mantiene valencia/activación, absorbe afecto y decae de manera perezosa con `ADVANCE_TO`.
 
 ---
 
@@ -625,6 +665,8 @@ Crea estado psicológico dentro del mundo del runtime. Valida cuotas, personalid
 
 `DerivedInit` permite mezcla determinista de fuentes sin asumir parentesco o biología.
 
+También puede utilizarse la infraestructura de perfiles para materializar un `AgentInit` desde uno o varios perfiles registrados antes de crear el agente.
+
 ## `REMOVE_AGENT`
 
 `ForgetRuntimeOnly` elimina el estado activo.  
@@ -687,7 +729,7 @@ Actualiza aprendizaje y estado asociado.
 
 ## `ADVANCE_TO`
 
-Materializa trabajo temporal perezoso: decaimiento emocional/mood, persistencia de metas y consolidación de memoria.
+Materializa trabajo temporal perezoso: decaimiento emocional hacia baseline, decaimiento de mood, persistencia de metas y consolidación de memoria.
 
 ## `REACT`
 
@@ -740,6 +782,8 @@ En importación:
 - `RekeyForDestination` es el default para traslado;
 - `PreserveState` se usa explícitamente para restore/replay del mismo contexto lógico.
 
+La variación de perfiles usa su propio seed derivado y no consume el stream principal del agente.
+
 ---
 
 # 21. Export, import y dominios temporales
@@ -767,6 +811,8 @@ Políticas de importación:
 - expectativas aprendidas.
 
 Nunca se reinterpretan ticks de un dominio como si fueran ticks de otro.
+
+Al insertar un estado importado en `AgentStore`, MSPA normaliza también el baseline emocional para mantener el invariante de agentes activos.
 
 ---
 
@@ -827,6 +873,8 @@ Se limitan, entre otros:
 - tamaño de strings;
 - tamaño serializado;
 - trazas diagnósticas.
+
+`max_emotions_per_agent` debe reservar al menos seis slots porque las seis emociones base forman parte del estado activo.
 
 Un Domain Pack no puede elevar `RuntimeLimits` ni `HardLimits`.
 
@@ -920,6 +968,27 @@ auto observed = runtime->observe(obs);
 
 Para semántica propia, construye un `RegistryBuilder`, aplica uno o más `DomainPack`, publica el snapshot y crea el runtime con ese snapshot; o usa staging/publicación en un runtime existente.
 
+### Perfil psicológico
+
+```cpp
+mspa::ProfileRegistry profiles;
+
+mspa::PsychologicalProfile profile;
+profile.id = mspa::ProfileId{1};
+profile.name = "mi_perfil";
+profile.personality = {0.6f, 0.7f, 0.8f, 0.5f, 0.7f, 0.4f};
+profiles.add(profile);
+
+mspa::ProfileRecipe recipe;
+recipe.components.push_back({mspa::ProfileId{1}, 1.0f});
+recipe.variation_seed = 42;
+recipe.variation_strength = 0.05f;
+
+auto resolved = profiles.resolve(recipe, agent);
+```
+
+Los nombres y parámetros concretos del perfil pertenecen al consumidor; MSPA sólo proporciona la infraestructura.
+
 ---
 
 # 27. ABI C
@@ -937,7 +1006,8 @@ Incluye:
 - advance;
 - export/import de bytes;
 - liberación de buffers;
-- último error.
+- último error;
+- registro y consulta de perfiles psicológicos.
 
 `mspa_decide_ex` acepta necesidades y señales genéricas. Las `mspa_action_option` aceptan tags, efectos esperados y señales por opción.
 
@@ -953,6 +1023,8 @@ Suites de CTest:
 mspa_core_tests
 mspa_semantics_tests
 mspa_psychology_tests
+mspa_profiles_tests
+mspa_emotion_baseline_tests
 mspa_runtime_tests
 mspa_persistence_tests
 mspa_c_api_tests
@@ -960,7 +1032,7 @@ mspa_security_tests
 mspa_c_header_tests
 ```
 
-La CI debe validar:
+La CI valida:
 
 - GCC/Linux Release;
 - Clang/Linux con AddressSanitizer + UndefinedBehaviorSanitizer;
@@ -999,14 +1071,15 @@ cmake --build build-bench --config Release
 8. Ninguna excepción cruza las fronteras públicas del runtime o C ABI.
 9. Toda entrada externa se valida bajo cuotas.
 10. La instrumentación no altera resultados.
-11. Packs concretos y adaptadores específicos viven fuera de MSPA.
+11. Packs concretos, perfiles concretos y adaptadores específicos viven fuera de MSPA.
 12. Nuevas reglas psicológicas deben conservar trazabilidad y tests de conformidad.
+13. Todo agente activo conserva las seis emociones base con intensidad distinta de cero.
 
 ---
 
 # 30. Documentos normativos
 
-Los siguientes archivos se mantienen **en sus nombres actuales** y están sincronizados con esta implementación:
+Los siguientes archivos se mantienen **en sus nombres actuales** y deben permanecer sincronizados con esta implementación:
 
 - `docs/MSPA-SPEC-v2.4.md`
 - `docs/MSPA-INTERACTION-CONTRACT-v0.2.md`
