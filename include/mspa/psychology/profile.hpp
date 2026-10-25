@@ -8,12 +8,6 @@
 #include "mspa/base/result.hpp"
 #include "mspa/model/agent_state.hpp"
 namespace mspa {
-enum class BuiltinProfile:std::uint8_t{Balanced=0,CautiousPersistent=1,CuriousBold=2};
-namespace builtin_profile_ids {
-inline constexpr ProfileId balanced{1};
-inline constexpr ProfileId cautious_persistent{2};
-inline constexpr ProfileId curious_bold{3};
-}
 struct ProfileGoalSeed{ConceptId concept_id{};float priority{0.5f};float commitment{0.5f};};
 struct PsychologicalProfile{
     ProfileId id{};
@@ -49,7 +43,4 @@ public:
 private:
     std::map<ProfileId,PsychologicalProfile> profiles_{};
 };
-[[nodiscard]] ProfileId builtin_profile_id(BuiltinProfile profile) noexcept;
-Result<PsychologicalProfile> make_builtin_profile(BuiltinProfile profile);
-Result<void> install_builtin_profiles(ProfileRegistry& registry);
 }
