@@ -1,0 +1,94 @@
+name: MSPA Behavioral Audit
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  acceptance-and-benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure acceptance suite
+        run: cmake -S . -B build -DMSPA_BUILD_TESTS=ON -DMSPA_BUILD_BENCHMARKS=ON -DCMAKE_BUILD_TYPE=Release
+      - name: Build acceptance suite
+        run: cmake --build build --parallel 2
+      - name: Verbose CTest evidence
+        shell: bash
+        run: |
+          set -o pipefail
+          ctest --test-dir build -C Release --output-on-failure -V | tee audit-ctest.log
+      - name: Performance baseline
+        shell: bash
+        run: |
+          set -o pipefail
+          ./build/mspa_benchmark | tee audit-benchmark.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mspa-audit-evidence
+          path: |
+            audit-ctest.log
+            audit-benchmark.log
+
+  fuzz-smoke:
+    runs-on: ubuntu-latest
+    env:
+      CC: clang
+      CXX: clang++
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure fuzzer
+        run: cmake -S . -B build-fuzz -DMSPA_BUILD_TESTS=OFF -DMSPA_BUILD_FUZZ=ON -DCMAKE_BUILD_TYPE=Debug
+      - name: Build fuzzer
+        run: cmake --build build-fuzz --parallel 2
+      - name: Run hostile-input smoke corpus
+        shell: bash
+        run: |
+          set -o pipefail
+          ./build-fuzz/mspa_deserialize_fuzz -runs=5000 2>&1 | tee audit-fuzz.log
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mspa-fuzz-evidence
+          path: audit-fuzz.log
+
+  mutation-hysteresis:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure mutation build
+        run: cmake -S . -B build-mutant -DMSPA_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
+      - name: Build behavioral acceptance test
+        run: cmake --build build-mutant --target mspa_audit_behavior_tests --parallel 2
+      - name: Confirm original passes
+        run: ./build-mutant/mspa_audit_behavior_tests
+      - name: Disable hysteresis deliberately
+        shell: bash
+        run: |
+          cat > src/decision/hysteresis.cpp <<'EOF'
+          #include "mspa/decision/hysteresis.hpp"
+          namespace mspa {
+          float HysteresisPolicy::continuity_bonus(const AgentPsychState&,const ActionOption&,ActionContinuityKey,float)const noexcept{return 0.0f;}
+          float HysteresisPolicy::switch_threshold(const AgentPsychState&,const ActionOption&,float)const noexcept{return 0.0f;}
+          }
+          EOF
+      - name: Mutation must be killed by tests
+        shell: bash
+        run: |
+          set -o pipefail
+          cmake --build build-mutant --target mspa_audit_behavior_tests --parallel 2
+          if ./build-mutant/mspa_audit_behavior_tests > audit-mutation.log 2>&1; then
+            cat audit-mutation.log
+            echo "FAIL: disabled hysteresis survived the acceptance suite"
+            exit 1
+          else
+            cat audit-mutation.log
+            echo "MUTATION_KILLED: hysteresis regression was detected"
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mspa-mutation-evidence
+          path: audit-mutation.log
