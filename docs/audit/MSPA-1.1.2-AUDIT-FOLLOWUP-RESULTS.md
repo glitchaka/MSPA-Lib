@@ -41,6 +41,7 @@ Commit corregido y auditado: `25978c1ca2d19ad7b6493ee35d04cbc3b09ae155`.
 ## Resultado final
 
 Workflow de auditoría: https://github.com/glitchaka/MSPA-Lib/actions/runs/40211349844
+Workflow CI multiplataforma: https://github.com/glitchaka/MSPA-Lib/actions/runs/40211349958
 
 Sobre `25978c1ca2d19ad7b6493ee35d04cbc3b09ae155`:
 
@@ -95,13 +96,12 @@ En el SHA auditado:
 
 - GCC Release: PASS;
 - Clang + ASan/UBSan: PASS;
+- MSVC Release: PASS;
 - shared build: PASS;
 - fuzz smoke: PASS;
-- mutation testing previo: PASS, incluyendo histéresis;
+- mutation testing: PASS, incluyendo histéresis;
 - benchmark y CTest verbose quedaron publicados como artifact del workflow de auditoría.
-
-MSVC se valida en el workflow CI correspondiente al mismo SHA; el estado final del informe debe considerarse multiplataforma sólo cuando ese job finalice en `success`.
 
 ## Conclusión
 
-El seguimiento encontró un defecto real que la fase 2 no detectó: la histéresis podía convertirse en bloqueo de acción. El criterio externo no se relajó. Tras corregir la política, H*, C* y P* pasan juntos contra la API pública.
+El seguimiento encontró un defecto real que la fase 2 no detectó: la histéresis podía convertirse en bloqueo de acción. El criterio externo no se relajó. Tras corregir la política, H*, C* y P* pasan juntos contra la API pública en GCC, Clang+sanitizers y MSVC.
