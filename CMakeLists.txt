@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(MSPA_Lib VERSION 1.0.0 LANGUAGES C CXX)
+project(MSPA_Lib VERSION 1.1.0 LANGUAGES C CXX)
 option(MSPA_BUILD_TESTS "Build MSPA tests" ON)
 option(MSPA_BUILD_BENCHMARKS "Build MSPA microbenchmarks" OFF)
 option(MSPA_BUILD_SHARED "Build MSPA as shared library" OFF)
@@ -11,7 +11,7 @@ endif()
 add_library(mspa ${MSPA_LIBRARY_TYPE}
  src/base/rng.cpp src/base/time.cpp
  src/semantics/registry.cpp src/semantics/inference.cpp src/semantics/domain_pack.cpp
- src/psychology/personality.cpp src/psychology/values.cpp src/psychology/beliefs.cpp src/psychology/appraisal.cpp src/psychology/emotions.cpp src/psychology/mood.cpp src/psychology/goals.cpp src/psychology/memory.cpp src/psychology/relationships.cpp src/psychology/learning.cpp src/psychology/reappraisal.cpp src/psychology/engine.cpp
+ src/psychology/personality.cpp src/psychology/profile.cpp src/psychology/profile_runtime.cpp src/psychology/values.cpp src/psychology/beliefs.cpp src/psychology/appraisal.cpp src/psychology/emotions.cpp src/psychology/mood.cpp src/psychology/goals.cpp src/psychology/memory.cpp src/psychology/relationships.cpp src/psychology/learning.cpp src/psychology/reappraisal.cpp src/psychology/engine.cpp
  src/decision/response_curve.cpp src/decision/consideration.cpp src/decision/decision.cpp src/decision/hysteresis.cpp
  src/runtime/agent_store.cpp src/runtime/runtime.cpp
  src/persistence/state_transfer.cpp src/persistence/serialization.cpp
@@ -38,7 +38,7 @@ install(EXPORT MSPATargets NAMESPACE MSPA:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/MSPAConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/MSPAConfigVersion.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/MSPA)
 if(MSPA_BUILD_TESTS)
  enable_testing()
- foreach(test_name IN ITEMS core semantics psychology runtime persistence c_api security)
+ foreach(test_name IN ITEMS core semantics psychology profiles runtime persistence c_api security)
    add_executable(mspa_${test_name}_tests tests/${test_name}_tests.cpp)
    target_compile_features(mspa_${test_name}_tests PRIVATE cxx_std_17)
    target_link_libraries(mspa_${test_name}_tests PRIVATE MSPA::mspa)
@@ -59,7 +59,6 @@ if(MSPA_BUILD_BENCHMARKS)
  target_compile_features(mspa_benchmark PRIVATE cxx_std_17)
  target_link_libraries(mspa_benchmark PRIVATE MSPA::mspa)
 endif()
-
 if(MSPA_BUILD_FUZZ)
   if(NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     message(FATAL_ERROR "MSPA_BUILD_FUZZ requires Clang")
