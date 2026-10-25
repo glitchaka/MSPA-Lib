@@ -3,105 +3,65 @@
 **MSPA — Motor de Simulación Psicológica y Cultural de Agentes**  
 **Agent Psychology Simulation Middleware**
 
-MSPA-Lib es una biblioteca **C++17** para mantener estado psicológico subjetivo de agentes, interpretar estímulos, formar y revisar creencias, producir appraisal y afecto, conservar memoria y relaciones, aprender expectativas y elegir entre acciones que el host declara físicamente disponibles.
+MSPA-Lib es una biblioteca C++17 para mantener estado psicológico subjetivo de agentes, interpretar estímulos, formar y revisar creencias, producir appraisal y afecto, conservar memoria y relaciones, aprender expectativas y elegir entre acciones que el host declara físicamente disponibles.
 
-> **MSPA procesa significado psicológico; el host controla la realidad y la ejecución.**
+> MSPA procesa significado psicológico; el host controla la realidad y la ejecución.
 
-Este README es **autocontenido**: contiene el contrato técnico necesario para integrar, mantener y extender MSPA. Los archivos de `docs/` conservan la misma información separada por área para revisión normativa, pero no son capítulos obligatorios para entender la biblioteca.
+Este README es autocontenido y funciona como entrada técnica. Los archivos de `docs/` conservan contratos normativos y evidencia de auditoría.
 
 ## Estado
 
-La implementación actual es **v1.1.1**.
+Versión actual: **1.1.2**.
 
-El núcleo cubre:
+El núcleo implementa:
 
-- runtime multi-instancia;
-- lifecycle de agentes;
-- semántica estructurada y `RegistrySnapshot`;
-- Domain Packs versionados y con dependencias;
+- múltiples runtimes aislados por proceso;
+- lifecycle de agentes (`CREATE_AGENT`, `REMOVE_AGENT`, `HAS_AGENT`, `DerivedInit`);
+- IDs fuertes, `AgentId = WorldId + local_id`;
+- tiempo lógico `PsychTime` y dominios temporales racionales;
+- `OBSERVE`, `DECIDE`, `REPORT`, `ADVANCE_TO`, `REACT` y formas batch;
+- semántica estructurada, `RegistrySnapshot`, staging/publicación y Domain Packs;
 - inferencia declarativa acotada;
-- personalidad, perfiles psicológicos extensibles, valores, creencias, appraisal, emociones, ánimo, metas, memoria y relaciones;
-- perfiles definidos por el host mediante `PsychologicalProfile`, `ProfileRegistry` y `ProfileRecipe`, sin presets rígidos dentro del core;
-- composición ponderada y variación determinista de perfiles por agente;
-- baseline emocional tónico para las seis emociones base: un agente activo nunca decae a un estado emocional totalmente nulo;
-- aprendizaje causal contextual;
-- Utility AI psicológica e histéresis;
-- `OBSERVE`, `DECIDE`, `REPORT`, `ADVANCE_TO`, `REACT` y sus formas batch;
-- export/import entre dominios temporales;
-- serialización binaria versionada y migración de estado;
+- personalidad, perfiles psicológicos extensibles, valores, creencias, appraisal, emociones, mood, metas, memoria, relaciones, reapreciación y aprendizaje contextual;
+- Utility AI psicológica, curvas, consideraciones e histéresis;
+- export/import, rebase temporal, serialización binaria versionada y migración;
 - RNG determinista por agente;
-- validación defensiva y cuotas;
+- validación defensiva, cuotas y `Result<T>` sin excepciones cruzando la API;
 - diagnostics explicables;
 - API C++ y ABI C;
-- build estático/compartido, instalación CMake, tests, benchmark y harness de fuzzing.
+- build estático/compartido, instalación CMake, tests, ASan/UBSan, fuzzing, mutation testing y benchmarks.
 
 ### Cambios 1.1.x
 
-**1.1.0** añade perfiles psicológicos extensibles definidos por el host. MSPA no incluye perfiles de juego ni personajes concretos: el consumidor registra cuantos perfiles necesite, puede combinarlos mediante pesos y aplicar variación determinista por agente.
+**1.1.0 — perfiles psicológicos extensibles.** `PsychologicalProfile`, `ProfileRegistry` y `ProfileRecipe` permiten que el host registre cuantos perfiles necesite, combine varios mediante pesos y aplique variación determinista por agente. MSPA no contiene perfiles concretos de juegos ni personajes.
 
-**1.1.1** añade el invariante de baseline emocional: todo agente activo mantiene las seis emociones base presentes y con intensidad mayor que cero. El decaimiento vuelve al nivel tónico derivado de personalidad y mood; ya no elimina las emociones al llegar a cero.
+**1.1.1 — baseline emocional tónico.** Todo agente activo conserva las seis emociones base por encima de cero. El baseline se deriva de personalidad y mood y el decaimiento vuelve a ese nivel en vez de eliminar la emoción.
 
-Lo que **no pertenece al alcance de MSPA** es intencional: física, pathfinding, animación, inventario, combate, percepción física, persistencia del mundo, scheduling del host y adaptadores específicos de juegos/motores. Esas capas viven fuera de este repositorio.
+**1.1.2 — endurecimiento conductual y auditoría.** Se separa explícitamente tono emocional de episodio para utilidad/urgencia/expresión, los fallos reducen la expectativa de éxito, la histéresis queda reflejada en la traza aritmética y se añaden pruebas de aceptación, fuzz smoke, mutation testing y benchmark poblacional. La auditoría encontró además un defecto real de timestamps emocionales (`PsychTime(0)` tratado como ausente), corregido antes del PASS final.
 
----
+## 1. Límite de responsabilidad
 
-# 1. Modelo de integración
-
-```text
-HOST / WORLD
-    │
-    │ OBSERVE: estímulos percibidos y proposiciones
-    ▼
-MSPA
-    ├─ creencias / inferencia
-    ├─ appraisal / emoción / mood
-    ├─ metas / memoria / relaciones
-    └─ aprendizaje
-    │
-    │ DECIDE: opciones reales ofrecidas por el host
-    ▼
-INTENCIÓN / ELECCIÓN / EXPLICACIÓN
-    │
-    │ el host ejecuta la acción real
-    ▼
-HOST
-    │
-    │ REPORT: resultado real
-    ▼
-MSPA actualiza expectativas y estado
-```
-
-MSPA **nunca crea una acción física que el host no haya ofrecido**. `DECIDE` sólo selecciona entre `ActionOption` recibidos.
-
-## Autoridad del host
-
-El host posee:
+### El host posee
 
 - mundo y entidades físicas;
-- percepción y línea de visión;
-- navegación y pathfinding;
-- física y colisiones;
-- inventario, economía y recursos;
-- combate y daño físico;
+- percepción física y línea de visión;
+- pathfinding, navegación, física y colisiones;
+- inventario, recursos, economía y combate;
 - animación y presentación;
-- catálogo de acciones físicamente posibles;
+- catálogo de acciones físicamente disponibles;
+- scheduling del mundo;
 - resultados reales de acciones;
-- scheduling y threads del mundo;
-- almacenamiento/transportes de bytes;
-- semántica específica del consumidor;
-- perfiles psicológicos concretos de sus personajes/agentes.
+- almacenamiento y transporte de bytes;
+- semántica específica del consumidor.
 
-## Autoridad de MSPA
+### MSPA posee
 
-MSPA posee:
-
-- personalidad;
-- infraestructura de perfiles psicológicos;
+- personalidad y perfiles de inicialización;
 - valores;
 - creencias subjetivas;
-- inferencia declarativa;
+- inferencia;
 - appraisal;
-- emociones y ánimo;
+- emociones y mood;
 - metas;
 - memoria;
 - relaciones direccionales;
@@ -110,25 +70,38 @@ MSPA posee:
 - continuidad de intención;
 - trazas explicables.
 
-**El core no contiene nombres, clases, personajes, lugares, repositorios ni reglas de un consumidor concreto.**
+MSPA nunca inventa una acción física. `DECIDE` sólo selecciona entre `ActionOption` recibidos del host.
 
----
+## 2. Flujo de integración
 
-# 2. Requisitos, build e instalación
+```text
+HOST / WORLD
+    │ OBSERVE
+    ▼
+MSPA: creencias -> inferencia -> appraisal -> emoción/mood -> memoria
+    │ DECIDE(opciones físicamente posibles)
+    ▼
+INTENCIÓN / ELECCIÓN / EXPLICACIÓN
+    │
+HOST ejecuta la acción real
+    │ REPORT(resultado)
+    ▼
+MSPA actualiza aprendizaje y estado
+```
+
+`REACT` es un wrapper `OBSERVE + DECIDE`; no define otra semántica.
+
+## 3. Build e instalación
 
 Requisitos:
 
-- CMake 3.20+
-- C++17
-- compilador MSVC, GCC o Clang
-- compilador C si se construyen los tests de ABI C
-
-Build estático con tests:
+- CMake 3.20+;
+- C++17;
+- MSVC, GCC o Clang;
+- compilador C para validar el header de ABI C.
 
 ```bash
-cmake -S . -B build \
-  -DMSPA_BUILD_TESTS=ON \
-  -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build -DMSPA_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
 ctest --test-dir build -C Release --output-on-failure
 ```
@@ -136,9 +109,7 @@ ctest --test-dir build -C Release --output-on-failure
 Build compartido:
 
 ```bash
-cmake -S . -B build-shared \
-  -DMSPA_BUILD_SHARED=ON \
-  -DCMAKE_BUILD_TYPE=Release
+cmake -S . -B build-shared -DMSPA_BUILD_SHARED=ON -DCMAKE_BUILD_TYPE=Release
 cmake --build build-shared --config Release
 ```
 
@@ -148,76 +119,66 @@ Instalación:
 cmake --install build --prefix ./mspa-install
 ```
 
-Un consumidor CMake puede usar:
+Consumo instalado:
 
 ```cmake
 find_package(MSPA 1 CONFIG REQUIRED)
 target_link_libraries(mi_programa PRIVATE MSPA::mspa)
 ```
 
+El alias `MSPA::mspa` también existe en el árbol de construcción, por lo que un consumidor que use `FetchContent` puede enlazar el mismo target.
+
 Opciones:
 
 | Opción | Default | Función |
 |---|---:|---|
-| `MSPA_BUILD_TESTS` | `ON` | Construye suites de tests |
-| `MSPA_BUILD_BENCHMARKS` | `OFF` | Construye microbenchmark |
-| `MSPA_BUILD_SHARED` | `OFF` | Construye biblioteca compartida |
-| `MSPA_BUILD_FUZZ` | `OFF` | Construye harness libFuzzer; requiere Clang |
+| `MSPA_BUILD_TESTS` | ON | suites CTest |
+| `MSPA_BUILD_BENCHMARKS` | OFF | benchmark OBSERVE/DECIDE |
+| `MSPA_BUILD_SHARED` | OFF | biblioteca compartida |
+| `MSPA_BUILD_FUZZ` | OFF | harness libFuzzer; requiere Clang |
 
-Política numérica de conformidad:
+Política numérica:
 
-- MSVC: `/fp:strict`;
-- GCC/Clang: sin `-ffast-math` y con `-ffp-contract=off`;
-- `PsychTime` usa enteros de 64 bits;
-- las escalas temporales son racionales, no `float`;
-- no se depende del orden de hash ni del scheduling de threads para resultados lógicos.
+- MSVC `/fp:strict`;
+- GCC/Clang sin fast-math y con `-ffp-contract=off`;
+- `PsychTime` entero de 64 bits;
+- escalas temporales racionales;
+- no se promete identidad bit-a-bit entre toolchains distintos, pero sí determinismo lógico bajo mismo estado/config/input/seed.
 
----
-
-# 3. Estructura del repositorio
+## 4. Estructura
 
 ```text
 include/mspa/
-├── mspa.hpp                  API agregada C++
-├── c_api.h                   ABI C
-├── base/                     IDs, Result, errores, RNG, tiempo, versión
-├── model/                    AgentPsychState
-├── semantics/                proposiciones, registry, inferencia, Domain Packs
-├── psychology/               personalidad, perfiles y subsistemas psicológicos
-├── decision/                 Utility AI, curvas, consideraciones, histéresis
-├── runtime/                  Runtime y AgentStore
-├── persistence/              transferencia y serialización
-├── validation/               límites y validación
-└── diagnostics/              trazas
-
+  mspa.hpp
+  c_api.h
+  base/
+  model/
+  semantics/
+  psychology/
+  decision/
+  runtime/
+  persistence/
+  validation/
+  diagnostics/
 src/
-├── base/
-├── semantics/
-├── psychology/
-├── decision/
-├── runtime/
-├── persistence/
-├── validation/
-├── diagnostics/
-└── c/
-
-tests/                        suites unitarias/integración/seguridad/C ABI
-benchmarks/                   microbenchmark
-fuzz/                         harness de deserialización
-cmake/                        paquete CMake instalable
-docs/                         copias normativas por área
+  base/
+  semantics/
+  psychology/
+  decision/
+  runtime/
+  persistence/
+  validation/
+  diagnostics/
+  c/
+tests/
+benchmarks/
+fuzz/
+docs/
 ```
 
-`#include <mspa/mspa.hpp>` es el punto de entrada C++.  
-`#include <mspa/c_api.h>` es el punto de entrada C.
+## 5. Identidad, runtimes y RNG
 
----
-
-# 4. Identidad y aislamiento
-
-Los identificadores son tipos fuertes (`RuntimeId`, `WorldId`, `NamespaceId`, `ConceptId`, `PredicateId`, `GoalId`, `BeliefId`, `MemoryId`, `ActionTypeId`, `ActionInstanceId`, `ActionContinuityKey`, `PackId`, `ProfileId`, `TimeDomainId`, etc.).
-
-`AgentId` incluye el mundo:
+Los IDs son tipos fuertes (`RuntimeId`, `WorldId`, `NamespaceId`, `ConceptId`, `PredicateId`, `GoalId`, `BeliefId`, `MemoryId`, `ActionTypeId`, `ActionInstanceId`, `ActionContinuityKey`, `PackId`, `ProfileId`, `TimeDomainId`, etc.).
 
 ```text
 AgentId
@@ -225,62 +186,30 @@ AgentId
   uint64 local_id
 ```
 
-Dos agentes con igual `local_id` y diferente `WorldId` son identidades distintas.
+Varios `Runtime` pueden coexistir sin `AgentStore` o RNG mutable global. Cada runtime posee configuración, dominio temporal, snapshot semántico, agentes, seed root, motor psicológico, decisión, diagnostics y límites.
 
-Pueden coexistir varios `Runtime` en el mismo proceso. No existe RNG global, `AgentStore` global ni registry mutable global obligatorio. Cada runtime conserva su propio:
+Cada agente deriva streams deterministas de `SeedRoot + AgentId + stream_kind`. Procesar otro agente no consume ni perturba la secuencia del primero.
 
-```text
-RuntimeConfig
-TimeDomain
-RegistrySnapshot
-AgentStore
-SeedRoot
-PsychologyEngine
-UtilityComposer
-TraceSink
-RuntimeLimits
-```
-
-Un `Runtime` no se considera internamente thread-safe para escrituras concurrentes. El host debe serializar las llamadas que muten **la misma instancia**. Runtimes diferentes pueden administrarse de forma independiente.
-
----
-
-# 5. Tiempo
+## 6. Tiempo
 
 ```text
 PsychTime = uint64 logical ticks
 ```
 
-Cada runtime fija al crearse:
+Cada runtime fija un `TimeDomain` con `TimeDomainId` y `TimeScale { ticks_per_second_num, ticks_per_second_den }`.
+
+`process_time` indica cuándo MSPA procesa la operación y debe ser monotónico por agente. `event_time` indica cuándo ocurrió el hecho y puede ser anterior al estado actual.
 
 ```text
-TimeDomain
-  TimeDomainId id
-  TimeScale scale
-
-TimeScale
-  ticks_per_second_num
-  ticks_per_second_den
+process_time < LastProcessedTime -> TimeRegression
+event_time < LastProcessedTime   -> permitido
 ```
 
-La escala es racional y permanece estable durante la vida del runtime.
+`RebaseRelative` convierte edades relativas al importar entre escalas distintas; nunca reinterpreta ticks de un dominio como si pertenecieran a otro.
 
-## `process_time` y `event_time`
+## 7. Estado psicológico
 
-`process_time` indica cuándo MSPA procesa una operación y debe ser monotónico por agente.
-
-`event_time` indica cuándo ocurrió el hecho referido. Puede ser anterior al estado actual, por ejemplo en testimonios tardíos, recuerdos o paquetes de red retrasados.
-
-```text
-process_time < LastProcessedTime  -> TimeRegression
-event_time < LastProcessedTime    -> permitido
-```
-
----
-
-# 6. Estado de agente
-
-`AgentPsychState` es el estado portable del agente y contiene:
+`AgentPsychState` contiene:
 
 ```text
 schema_version
@@ -299,9 +228,9 @@ RngState
 LastProcessedTime
 ```
 
-## Personalidad
+### Personalidad
 
-Seis ejes normalizados `[0,1]`:
+Seis ejes `[0,1]`:
 
 - sociabilidad;
 - estabilidad;
@@ -310,542 +239,145 @@ Seis ejes normalizados `[0,1]`:
 - curiosidad;
 - audacia.
 
-De ellos se derivan sensibilidades como rigidez de creencias, persistencia de metas, resistencia al cambio, sensibilidad a amenaza, sensibilidad social y exploración. La personalidad **modula** cálculos; no se usa como una tabla rígida de “acción + puntos”.
+De ellos se derivan rigidez de creencias, persistencia de metas, resistencia al cambio, sensibilidad a senales, sensibilidad social y exploración.
 
-## Perfiles psicológicos
+### Perfiles psicológicos
 
-Los perfiles son datos reutilizables definidos por el host. MSPA no impone presets propios.
+MSPA no trae perfiles concretos hardcodeados. El host usa:
 
-`PsychologicalProfile` puede contener:
 
-- `ProfileId`;
-- nombre y descripción;
-- personalidad base;
-- valores iniciales;
-- mood basal;
-- semillas de metas.
-
-`ProfileRegistry` permite registrar, eliminar, consultar y enumerar tantos perfiles como necesite el consumidor. No existe un límite conceptual de tres perfiles.
-
-`ProfileRecipe` permite combinar varios perfiles mediante pesos. La resolución produce un `ResolvedProfile`; opcionalmente puede aplicar variación determinista por agente mediante `variation_seed` y `variation_strength`.
-
-La personalidad concreta de un agente se materializa al crearlo; después su estado psicológico continúa evolucionando individualmente. El perfil no sustituye memoria, aprendizaje, relaciones, emociones o experiencias propias del agente.
-
-## Valores
-
-`ValueEntry = ConceptId + intensidad`.
-
-Los conceptos concretos se registran externamente. Un Domain Pack puede declarar `initial_values`; un `AgentInit` puede solicitar que se apliquen los defaults del registry mediante `use_registry_default_values`.
-
----
-
-# 7. Proposiciones y semántica
-
-MSPA no almacena conocimiento como texto libre. Una `Proposition` contiene:
-
-- `PredicateId`;
-- argumentos por rol;
-- polaridad;
-- namespace;
-- calificadores;
-- tiempo opcional;
-- procedencia.
-
-Un argumento puede conservar valor textual, referencia de agente o referencia conceptual.
-
-Un `PredicateSchema` declara:
-
-- roles obligatorios y opcionales;
-- rol de agencia;
-- roles objetivo;
-- categorías de consecuencia;
-- pistas de appraisal;
-- conceptos relacionados;
-- relevancia base;
-- consecuencia base;
-- intencionalidad.
-
-`validate_proposition` rechaza IDs inválidos, namespaces incompatibles, roles obligatorios ausentes, roles duplicados y entradas que superen cuotas.
-
----
-
-# 8. Registry y snapshots
-
-`RegistrySnapshot` es inmutable desde la perspectiva de una operación/batch. Contiene:
-
-- predicados;
-- conceptos;
-- tipos y schemas de acciones;
-- consideraciones configurables;
-- reglas de inferencia;
-- packs cargados y sus versiones;
-- valores iniciales declarados.
-
-Cambios semánticos se realizan con `RegistryBuilder`:
-
-```text
-snapshot activo
-   ↓ copiar
-staging RegistryBuilder
-   ↓ validar / añadir packs
-publish()
-   ↓
-nuevo snapshot
+``text
+PsychologicalProfile
+ProfileRegistry
+ProfileRecipe
 ```
 
-Un batch iniciado sigue usando el snapshot capturado al comienzo. Los cambios se publican entre batches.
+para registrar tantos perfiles como necesite, mezclarlos con pesos y añadir variación determinista por agente. Un perfil contiene personalidad, valores, mood basal y metas iniciales. Tras crear el agente, su estado evoluciona individualmente.
 
----
+## 8. Semántica, registry y Domain Packs
 
-# 9. Domain Packs
+Una `Proposition` contiene predicado, argumentos por rol, polaridad, namespace, calificadores, tiempo opcional y procedencia. `PredicateSchema` declara roles obligatorios/opcionales, agencia, targets, consecuencias, pistas de appraisal e intencionalidad.
 
-MSPA define el contrato; **los packs concretos pertenecen a consumidores externos**.
+`RegistrySnapshot` inmutable contiene predicados, conceptos, acciones, consideraciones, reglas de inferencia, packs cargados y valores iniciales.
 
-`DomainPack` puede declarar:
+Los cambios semánticos se realizan con `RegistryBuilder` en staging y se publican entre batches. El batch en curso conserva su snapshot.
 
-- ID, namespace y versión;
-- versión mínima de MSPA;
-- dependencias de otros packs con versión mínima;
-- predicados y conceptos;
-- tipos y schemas de acción;
-- consideraciones y curvas;
-- reglas de inferencia;
-- `ContextTags` y `OutcomeTags`;
-- valores iniciales.
+Un `DomainPack` puede declarar vocabulario, schemas, acciones, consideraciones, curvas, reglas de inferencia, tags y valores iniciales. No puede ejecutar código nativo arbitrario, acceder a red/filesystem, elevar límites ni introducir clases concretas del host en el core.
 
-El runtime valida dependencias antes de stagear un pack. No basta con que un `PackId` exista: debe cumplir la versión mínima declarada.
+## 9. Inferencia y creencias
 
-Un pack no puede:
+`InferenceEngine` realiza forward chaining declarativo acotado por reglas, hipótesis y profundidad, evitando duplicados/ciclos simples.
 
-- ejecutar código nativo arbitrario;
-- acceder a red/filesystem desde el motor de reglas;
-- elevar límites del runtime;
-- introducir clases del host dentro del core;
-- forzar una emoción universal como verdad física.
+Una creencia conserva proposición, certeza, carga emocional, fuente, agente fuente opcional, evidencia y tiempo. La actualización considera certeza previa, confianza de fuente, personalidad y resistencia emocional. Evidencia contradictoria puede debilitar la creencia y eventualmente invertir su polaridad.
 
----
+## 10. Appraisal, emociones y mood
 
-# 10. Inferencia
+`AppraisalEngine` produce relevancia, consecuencia, agencia, intencionalidad, certeza, control, alineación normativa, error de expectativa y relación.
 
-`InferenceEngine` implementa forward chaining declarativo acotado.
+Emociones básicas:
 
-Una regla declara:
+- Joy;
+- Sadness;
+- Fear;
+- Anger;
+- Anxiety;
+- Aversion.
 
-```text
-premisas (predicado + polaridad)
-→ conclusión (predicado + polaridad + namespace)
-+ certeza base
-```
+Todo agente activo conserva las seis. El `EmotionSystem` distingue:
 
-La inferencia:
+- **baseline tónico**: nivel basal derivado de personalidad/mood, mínimo 1%;
+- **exceso episódico**: `max(0, intensidad - baseline)`.
 
-- respeta `max_rules`;
-- respeta `max_hypotheses`;
-- respeta `max_depth`;
-- evita duplicados/ciclos lógicos simples;
-- produce hipótesis, no “verdades globales”;
-- puede usar reglas registradas por Domain Packs.
+El baseline tónico no se usa como si el agente estuviera episódicamente asustado/enfadado: no eleva por sólo el riesgo de `DECIDE`, no genera urgencia de `ADVANCE_TO` y no se publica como `expressed_emotion`. El decaimiento reduce episodios hacia el baseline.
 
-No es Turing-completa y no ejecuta callbacks nativos de packs.
+`MoodSystem` mantiene valencia/activación y decae perezosamente con el tiempo.
 
----
+## 11. Metas, memoria, relaciones y reapreciación
 
-# 11. Creencias
+Las metas tienen prioridad, compromiso, estado y timestamps. Estados: `Active`, `Suspended`, `Blocked`, `Completed`, `Abandoned`.
 
-Una creencia conserva:
+La memoria conserva proposición, importancia, carga emocional, certeza, fuente, participantes y tiempos. La reapreciación puede alterar interpretación/carga afectiva sin reescribir silenciosamente la proposición factual almacenada.
 
-- proposición completa;
-- certeza;
-- carga emocional;
-- fuente (`Observation`, `Testimony`, `Inference`, `Memory`, `Influence`, `Learning`);
-- agente fuente opcional;
-- conteo de evidencia;
-- timestamp de actualización.
+Las relaciones actuales son direccionales `A -> B` y usan `AgentId`
+como destino. El soporte para entidades no-agente sigue siendo un gap conocido.
 
-La actualización por evidencia considera:
+## 12. Aprendizaje
 
-- certeza previa;
-- certeza percibida;
-- confianza en fuente;
-- rigidez derivada de personalidad;
-- resistencia emocional;
-- contradicción o compatibilidad.
-
-La evidencia contradictoria puede debilitar una creencia y, si supera el soporte previo, invertir su polaridad en vez de crear automáticamente “verdad global”.
-
----
-
-# 12. Appraisal, emociones y ánimo
-
-`AppraisalEngine` produce un vector con:
-
-- relevancia;
-- consecuencia;
-- agencia;
-- intencionalidad;
-- certeza;
-- control;
-- alineación normativa;
-- error de expectativa;
-- relación.
-
-Usa el schema semántico, valores/metas relacionados, personalidad, control percibido, certeza y relaciones identificables en la proposición.
-
-Emociones básicas implementadas:
-
-- `Joy`;
-- `Sadness`;
-- `Fear`;
-- `Anger`;
-- `Anxiety`;
-- `Aversion`.
-
-## Baseline emocional 1.1.1
-
-Todo `AgentPsychState` activo mantiene las seis emociones base presentes. `active_emotion_floor` establece un mínimo absoluto del 1%, mientras que `EmotionSystem::baseline()` calcula un nivel tónico mayor o igual a ese piso utilizando personalidad y mood.
-
-`EmotionSystem::ensure_baseline()` materializa las seis emociones cuando un agente entra al `AgentStore` o cuando se procesa su estado. `EmotionSystem::decay()` reduce activaciones hacia el baseline correspondiente, pero no elimina la emoción ni permite que caiga a cero.
-
-Un agente eliminado del runtime deja de tener estado psicológico; el invariante se aplica exclusivamente a agentes activos.
-
-`MoodSystem` mantiene valencia/activación, absorbe afecto y decae de manera perezosa con `ADVANCE_TO`.
-
----
-
-# 13. Metas
-
-Las metas conservan concepto, prioridad, compromiso, estado y timestamps.
-
-Estados:
-
-- `Active`;
-- `Suspended`;
-- `Blocked`;
-- `Completed`;
-- `Abandoned`.
-
-`GoalSystem` puede:
-
-- crear metas;
-- cambiar estado;
-- derivar metas desde señales genéricas;
-- limitar cuántas dominan simultáneamente;
-- aplicar persistencia/decaimiento según personalidad y paso del tiempo.
-
-MSPA no presupone de dónde provino la señal: necesidad física, compromiso, valor, evento o influencia son interpretaciones del host/datos.
-
----
-
-# 14. Memoria y reapreciación
-
-Una memoria conserva:
-
-- proposición;
-- importancia;
-- carga emocional;
-- certeza;
-- fuente;
-- participantes;
-- `event_time`;
-- última reactivación;
-- número de reactivaciones.
-
-`MemorySystem` permite recordar, reactivar, buscar, compactar y consolidar. La consolidación prioriza importancia, carga emocional, reactivación y recencia bajo las cuotas del runtime.
-
-`ReappraisalSystem` puede modificar interpretación/carga afectiva de memorias o creencias sin reescribir silenciosamente la proposición factual almacenada.
-
----
-
-# 15. Relaciones
-
-Las relaciones son **direccionales**:
-
-```text
-A -> B != B -> A
-```
-
-Cada `RelationshipState` mantiene:
-
-- afecto;
-- confianza;
-- respeto;
-- familiaridad.
-
-`REPORT` puede aplicar `RelationshipImpact` después de una acción real.
-
----
-
-# 16. Aprendizaje
-
-El aprendizaje causal inicial es deliberadamente acotado:
+El aprendizaje causal implementado es:
 
 ```text
 ActionType + ContextTags -> OutcomeTag
 ```
 
-Cada patrón conserva:
+Cada patrón conserva intentos, ocurrencias/éxitos, confianza y última activación. Desde 1.1.2 cada `REPORT` actualiza expectativas complementarias de `success` y `failuref� por lo que exitos repetidos elevan la expectativa de éxito y fallos repetidos la reducen. Los tags se canonicalizan y permiten especialización contextual.
 
-- intentos;
-- éxitos/ocurrencias;
-- confianza;
-- última activación.
+El aprendizaje observacional de resultados de otros agentes todav nünca forma parte del core certificado.
 
-Los tags de contexto se canonicalizan para conservar determinismo. `DECIDE` puede incorporar la expectativa aprendida relevante para la opción actual.
+## 13. Decisión e histéresis
 
----
+`ActionOption` puede incluir tipo/instancia/continuidad, actor/targets, coste, riesgo, progreso, novedad, exposición social, coste de interrupción, estabilidad de contexto, tags, efectos esperados y señales.
 
-# 17. Decisión
+`DecisionContext` permite presiones genéricas del host (por ejemplo necesidades) sin hardcodearlas en MSPA.
 
-`ActionOption` describe sólo opciones físicamente posibles y puede incluir:
+`UtilityComposer` combina coste, riesgo, progreso, personalidad, exceso emocional episódico, necesidades, valores, metas, relaciones, mood, expectativas aprendidas y consideraciones configuradas por Domain Packs.
 
-- tipo, instancia y `ActionContinuityKey`;
-- actor y objetivos;
-- coste y riesgo;
-- progreso;
-- novedad;
-- exposición social;
-- coste de interrupción;
-- estabilidad de contexto;
-- `ContextTags`;
-- efectos esperados;
-- señales nombradas.
+`HysteresisPolicy` usa `ActionContinuityKey`, persistencia, progreso, coste de interrupción, estabilidad y urgencia. En 1.1.2 sus aportes aparecen dentro de `CandidateScore::considerations`, de modo que la suma de la traza reproduce la utilidad con la que se seleccionó la acción.
 
-`DecisionContext` permite al host proporcionar presiones genéricas, por ejemplo necesidades, **sin hardcodear hambre/sed/etc. en MSPA**:
+## 14. Lifecycle y operaciones públicas
 
-```text
-NeedSignal
-  ConceptId
-  pressure
-```
+### `CREATE_AGENT`
+Crea estado psicológico validado. `DerivedInit` permite mezcla determinista de fuentes sin asumir parentesco/biología.
 
-Los `ExpectedEffect` pueden afectar canales:
+### `REMOVE_AGENT`
+`ForgetRuntimeOnly` elimina el estado. `ValidateNoReferences` rechaza si otros estados aún lo referencian.
 
-- Need;
-- Value;
-- Goal;
-- Relationship;
-- Emotion;
-- Generic.
+### `OBSERVE`
+Valida proposición y tiempos, actualiza creencias, ejecuta inferencia, appraisal, emociones/mood y memoria. Devuelve `ObserveResult` con cambio, recomendación, urgencia, amenaza a acción actual y token diagnóstico.
 
-`UtilityComposer` combina sólo consideraciones relevantes:
+### `DECIDE`
+Selecciona únicamente entre acciones ofrecidas. Devuelve selección, target, confianza, intención, emoción expresada episódica y traza de candidatos.
 
-- coste/riesgo/progreso;
-- personalidad;
-- miedo/ansiedad;
-- necesidades;
-- valores;
-- metas;
-- relaciones;
-- mood/emociones;
-- expectativas aprendidas;
-- consideraciones configuradas por Domain Pack.
+### `REPORT`
+Comunica el resultado real y actualiza aprendizaje, relaciones y proposiciones resultantes.
 
-Las curvas configurables son lineales por tramos y serializables como datos.
+### `ADVANCE_TO`
+Materializa decaimiento emocional/mood, metas y consolidación de memoria. Tiempo regresivo devuelve `TimeRegression`.
 
-## Histéresis
+## 15. Batch y determinismo
 
-`HysteresisPolicy` usa:
-
-- `ActionContinuityKey`;
-- persistencia;
-- progreso;
-- coste de interrupción;
-- estabilidad de contexto;
-- urgencia.
-
-Esto evita que pequeñas diferencias de utilidad hagan oscilar la intención en cada evaluación.
-
----
-
-# 18. Flujo público
-
-## `CREATE_AGENT`
-
-Crea estado psicológico dentro del mundo del runtime. Valida cuotas, personalidad, estado inicial y RNG.
-
-`DerivedInit` permite mezcla determinista de fuentes sin asumir parentesco o biología.
-
-También puede utilizarse la infraestructura de perfiles para materializar un `AgentInit` desde uno o varios perfiles registrados antes de crear el agente.
-
-## `REMOVE_AGENT`
-
-`ForgetRuntimeOnly` elimina el estado activo.  
-`ValidateNoReferences` rechaza la eliminación si otros estados psicológicos todavía referencian al agente.
-
-## `HAS_AGENT`
-
-Consulta read-only.
-
-## `OBSERVE`
-
-Entrada principal:
-
-```text
-AgentId
-Proposition
-StimulusTime(process_time, event_time?)
-perceived_certainty
-source_trust
-BeliefSource
-source_agent?
-```
-
-Pipeline:
-
-```text
-validación
-→ actualización de creencia
-→ inferencia acotada
-→ appraisal
-→ emoción
-→ mood
-→ memoria
-→ ObserveResult
-```
-
-`ObserveResult` incluye:
-
-- `state_changed`;
-- `decision_recommended`;
-- `urgency` (`None`, `Normal`, `Soon`, `Immediate`);
-- `current_action_threatened`;
-- token diagnóstico.
-
-## `DECIDE`
-
-Recibe acciones disponibles, contexto psicológico externo opcional y continuidad actual. Devuelve selección, objetivo, confianza y traza de candidatos.
-
-## `REPORT`
-
-Comunica el resultado **real** de la acción. Puede incluir:
-
-- éxito/fallo;
-- ContextTags;
-- OutcomeTags;
-- proposiciones resultantes;
-- impactos relacionales.
-
-Actualiza aprendizaje y estado asociado.
-
-## `ADVANCE_TO`
-
-Materializa trabajo temporal perezoso: decaimiento emocional hacia baseline, decaimiento de mood, persistencia de metas y consolidación de memoria.
-
-## `REACT`
-
-Wrapper `OBSERVE + DECIDE`; no añade una semántica diferente.
-
----
-
-# 19. Batch y determinismo
-
-Existen:
-
-- `observe_batch`;
-- `decide_batch`;
-- `report_batch`;
-- `advance_batch`.
-
-El orden canónico es:
+Existen `observe_batch`, `decide_batch`, `report_batch`, `advance_batch`. Orden canónico:
 
 ```text
 (AgentId, input_sequence)
 ```
 
-Para operaciones repetidas del mismo agente se valida que los tiempos de procesamiento sean compatibles con ese orden. Duplicar `input_sequence` o producir un orden temporal irresoluble devuelve `BatchConflict`.
+Duplicar `input_sequence` para el mismo agente o producir tiempo irresoluble devuelve `BatchConflict`. Una llamada individual es conceptualmente batch de uno.
 
-Una llamada individual es conceptualmente un batch de uno.
+Auditoría 1.1.2 demuestra:
 
-El objetivo de determinismo es:
+- mismo escenario dos veces -> bytes exportados idénticos;
+- añadir/procesar otro agente no cambia el estado exportado del objetivo;
+- batch barajado == batch canónico;
+- batch == llamadas individuales.
 
-```text
-mismo estado + registry + inputs + timestamps + seed
-→ mismo resultado lógico
-```
+## 16. Persistencia
 
-El proyecto no promete todavía identidad bit-a-bit entre toolchains/arquitecturas distintas, pero evita deliberadamente fuentes obvias de nondeterminismo lógico.
+`ExportedAgent` incluye estado, dominio temporal de origen y `exported_at`.
 
----
+Políticas:
 
-# 20. RNG
-
-Cada agente tiene un stream independiente derivado de:
-
-```text
-SeedRoot + AgentId + stream_kind
-```
-
-Crear/procesar otro agente no consume su secuencia.
-
-En importación:
-
-- `RekeyForDestination` es el default para traslado;
-- `PreserveState` se usa explícitamente para restore/replay del mismo contexto lógico.
-
-La variación de perfiles usa su propio seed derivado y no consume el stream principal del agente.
-
----
-
-# 21. Export, import y dominios temporales
-
-`ExportedAgent` contiene:
-
-- estado psicológico;
-- dominio temporal de origen;
-- `exported_at`.
-
-Políticas de importación:
-
-- `RebaseRelative` — default;
-- `PreserveAbsolute` — requiere dominio y escala compatibles;
+- `RebaseRelative` (default);
+- `PreserveAbsolute` para dominio/escala compatibles;
 - `RejectIncompatible`.
 
-`RebaseRelative` convierte y reancla todos los timestamps relevantes:
+RNG de importación:
 
-- `last_processed_time`;
-- mood;
-- creencias y tiempo de proposiciones;
-- emociones;
-- metas;
-- memorias y tiempo de proposiciones;
-- expectativas aprendidas.
+- `RekeyForDestination` por defecto;
+- `PreserveState` para restore/replay explícito.
 
-Nunca se reinterpretan ticks de un dominio como si fueran ticks de otro.
+La serialización binaria versionada valida magic, versión, longitudes, límites y truncado. El host controla dónde se guardan/transportan bytes.
 
-Al insertar un estado importado en `AgentStore`, MSPA normaliza también el baseline emocional para mantener el invariante de agentes activos.
-
----
-
-# 22. Serialización y migración
-
-MSPA incluye un formato binario propio para `ExportedAgent`:
-
-- magic `MSPA`;
-- versión de formato;
-- versión de schema de estado;
-- enteros explícitos;
-- floats codificados de forma estable;
-- longitudes validadas;
-- límites de bytes;
-- rechazo de truncado, overflow lógico y payload hostil.
-
-APIs C++:
-
-```cpp
-serialize_agent(...)
-deserialize_agent(...)
-migrate_agent_state(...)
-Runtime::export_agent_bytes(...)
-Runtime::import_agent_bytes(...)
-```
-
-El host sigue siendo responsable de **dónde** guarda o transporta esos bytes.
-
----
-
-# 23. Validación y cuotas
-
-Toda entrada externa se considera no confiable.
+## 17. Validación, cuotas y errores
 
 Jerarquía:
 
@@ -855,36 +387,11 @@ HardLimits
 RuntimeLimits
   ↓
 DefaultLimits
-  ↓
-recomendaciones externas
 ```
 
-Se limitan, entre otros:
+Se limitan agentes, valores, creencias, emociones, memorias, metas, relaciones, patrones de aprendizaje, argumentos, strings, bytes serializados y diagnostics. Los packs no pueden elevar límites.
 
-- agentes;
-- valores;
-- creencias;
-- emociones;
-- memorias;
-- metas;
-- relaciones;
-- patrones de aprendizaje;
-- argumentos de proposición;
-- tamaño de strings;
-- tamaño serializado;
-- trazas diagnósticas.
-
-`max_emotions_per_agent` debe reservar al menos seis slots porque las seis emociones base forman parte del estado activo.
-
-Un Domain Pack no puede elevar `RuntimeLimits` ni `HardLimits`.
-
----
-
-# 24. Errores
-
-La API C++ usa `Result<T>`.
-
-`ErrorCode` incluye:
+La API C++ usa `Result<T>`. Códigos principales:
 
 - `InvalidArgument`;
 - `UnknownAgent`;
@@ -901,123 +408,33 @@ La API C++ usa `Result<T>`.
 - `SerializationError`;
 - `InternalInvariantViolation`.
 
-Las fronteras públicas del runtime convierten `std::bad_alloc` en `OutOfMemory` y no dejan escapar excepciones.
+`std::bad_alloc` se captura en fronteras públicas y se traduce a `OutOfMemory`.
 
-La ABI C traduce estos errores a `mspa_status`; `mspa_last_error()` expone el detalle textual del último error del thread.
+## 18. Diagnostics y explicación
 
----
-
-# 25. Diagnostics
-
-`TraceSink` conserva trazas acotadas con token estable para la sesión del runtime.
-
-La ruta explicativa puede registrar:
+`TraceSink` conserva trazas acotadas. La instrumentación no consume RNG ni modifica el resultado. La traza puede cubrir:
 
 ```text
 OBSERVE
-→ belief update
-→ inference
-→ appraisal
-→ emotion/mood
-→ memory
-→ DECIDE candidates
-→ utility considerations
-→ selected action
-→ REPORT
-→ learning
+-> belief update / inference
+-> appraisal
+-> emotion / mood
+-> DECIDE candidates
+-> considerations
+-> hysteresis
+-> selected action
+-> REPORT / learning
 ```
 
-La instrumentación no consume el RNG del agente ni modifica el resultado lógico.
+Las pruebas 1.1.2 verifican que las contribuciones listadas suman la utilidad y que el candidato de mayor utilidad trazada coincide con la acción seleccionada.
 
----
+## 19. ABI C
 
-# 26. API C++ mínima
+`mspa/c_api.h` expone un `mspa_runtime*` opaco, versión, lifecycle, observe, decide/decide_ex, report/report_ex, advance, export/import de bytes, buffers, errores y registro de perfiles. El header se compila como C real.
 
-```cpp
-#include <mspa/mspa.hpp>
+## 20. Auditoría y pruebas
 
-mspa::RuntimeConfig cfg;
-cfg.runtime_id = mspa::RuntimeId{1};
-cfg.world_id = mspa::WorldId{1};
-cfg.time_domain = {
-    mspa::TimeDomainId{1},
-    mspa::TimeScale{60, 1}
-};
-cfg.seed_root = 1234;
-
-auto runtime_result = mspa::Runtime::create(cfg);
-if (!runtime_result) {
-    // runtime_result.error_if()
-    return;
-}
-auto runtime = std::move(*runtime_result.value_if());
-
-mspa::AgentId agent{cfg.world_id, 1};
-mspa::AgentInit init;
-runtime->create_agent(agent, init, mspa::PsychTime{0});
-
-mspa::ObserveInput obs;
-obs.agent = agent;
-obs.proposition.predicate = mspa::PredicateId{1};
-obs.proposition.name_space = mspa::NamespaceId{1};
-obs.time.process_time = mspa::PsychTime{10};
-// El PredicateSchema correspondiente debe estar registrado.
-
-auto observed = runtime->observe(obs);
-```
-
-Para semántica propia, construye un `RegistryBuilder`, aplica uno o más `DomainPack`, publica el snapshot y crea el runtime con ese snapshot; o usa staging/publicación en un runtime existente.
-
-### Perfil psicológico
-
-```cpp
-mspa::ProfileRegistry profiles;
-
-mspa::PsychologicalProfile profile;
-profile.id = mspa::ProfileId{1};
-profile.name = "mi_perfil";
-profile.personality = {0.6f, 0.7f, 0.8f, 0.5f, 0.7f, 0.4f};
-profiles.add(profile);
-
-mspa::ProfileRecipe recipe;
-recipe.components.push_back({mspa::ProfileId{1}, 1.0f});
-recipe.variation_seed = 42;
-recipe.variation_strength = 0.05f;
-
-auto resolved = profiles.resolve(recipe, agent);
-```
-
-Los nombres y parámetros concretos del perfil pertenecen al consumidor; MSPA sólo proporciona la infraestructura.
-
----
-
-# 27. ABI C
-
-La ABI C está en `mspa/c_api.h` y utiliza un `mspa_runtime*` opaco.
-
-Incluye:
-
-- versión;
-- creación/destrucción de runtime;
-- crear/eliminar/consultar agente;
-- observe;
-- decide / decide_ex;
-- report / report_ex;
-- advance;
-- export/import de bytes;
-- liberación de buffers;
-- último error;
-- registro y consulta de perfiles psicológicos.
-
-`mspa_decide_ex` acepta necesidades y señales genéricas. Las `mspa_action_option` aceptan tags, efectos esperados y señales por opción.
-
-El header se compila como **C real**, no sólo bajo `extern "C"` desde C++.
-
----
-
-# 28. Tests, sanitizers, fuzz y benchmark
-
-Suites de CTest:
+Suites principales CTest:
 
 ```text
 mspa_core_tests
@@ -1029,61 +446,60 @@ mspa_runtime_tests
 mspa_persistence_tests
 mspa_c_api_tests
 mspa_security_tests
+mspa_audit_determinism_tests
+mspa_audit_behavior_tests
+mspa_audit_security_time_tests
+mspa_audit_trace_scenario_tests
 mspa_c_header_tests
 ```
 
-La CI valida:
+El workflow normal valida GCC/Linux, Clang con ASan/UBSan, MSVC/Windows y build compartido. `.github/workflows/audit.yml` añade CTest verbose, benchmark, 5.000 runs libFuzzer y mutation testing de histéresis.
 
-- GCC/Linux Release;
-- Clang/Linux con AddressSanitizer + UndefinedBehaviorSanitizer;
-- MSVC/Windows Release;
-- build compartido Linux.
+Evidencia de 1.1.2:
 
-Fuzzer de deserialización:
+- [`docs/audit/MSPA-1.1.2-AUDIT-PLAN.md`](docs/audit/MSPA-1.1.2-AUDIT-PLAN.md)
+- [`docs/audit/MSPA-1.1.2-AUDIT-RESULTS.md`](docs/audit/MSPA-1.1.2-AUDIT-RESULTS.md)
+- [`docs/audit/MSPA-1.1.2-CTEST-VERBOSE.md`](docs/audit/MSPA-1.1.2-CTEST-VERBOSE.md)
+- [`docs/audit/MSPA-1.1.2-TRACE-FOUR-PROFILES.md`](docs/audit/MSPA-1.1.2-TRACE-FOUR-PROFILES.md)
+- [`docs/audit/MSPA-CONFORMANCE-MATRIX.md`](docs/audit/MSPA-CONFORMANCE-MATRIX.md)
 
-```bash
-cmake -S . -B build-fuzz \
-  -DMSPA_BUILD_TESTS=OFF \
-  -DMSPA_BUILD_FUZZ=ON \
-  -DCMAKE_CXX_COMPILER=clang++
-cmake --build build-fuzz
-```
+Benchmark de referencia en GitHub Actions (Ubuntu 24.04 / GCC 13.3, 100.000 operaciones por caso): aproximadamente 35k operaciones/s tanto en `OBSERVE` como en `DECIDE` para poblaciones de 100, 1.000 y 10.000 agentes. Es una línea base, no un SLA.
 
-Benchmark:
+## 21. Gaps culturales explícitos
 
-```bash
-cmake -S . -B build-bench -DMSPA_BUILD_BENCHMARKS=ON
-cmake --build build-bench --config Release
-./build-bench/mspa_benchmark
-```
+El nombre MSPA conserva la ambición psicológica y cultural, pero **la auditoría 1.1.2 no declara completa la capa cultural**. Aún faltan contratos/implementación/tests para:
 
----
+- aprendizaje observacional del resultado de otros agentes;
+- normas percibidas de grupo;
+- afirmaciones/rumores transmisibles como salida explícita;
+- métricas poblacionales de deriva, diversidad y polarización;
+- relaciones con destinos no representados por `AgentId`.
 
-# 29. Invariantes de mantenimiento
+Estos puntos figuran como `GAP` en la matriz de conformidad y no deben presentarse como funcionalidad ya implementada.
+
+## 22. Invariantes de mantenimiento
 
 1. El core permanece agnóstico al host.
-2. El host conserva autoridad sobre realidad/ejecución.
+2. El host conserva autoridad sobre realidad y ejecución.
 3. MSPA sólo elige acciones ofrecidas.
-4. Los IDs fuertes no se intercambian implícitamente.
-5. `process_time` es monotónico por agente.
-6. Registry/configuración visibles son inmutables durante un batch.
+4. IDs fuertes no se intercambian implícitamente.
+5. `process_time` es monotónico por agente; `event_time` puede ser anterior.
+6. Registry/configuración visibles son inmutables durante batch.
 7. RNG es independiente por agente.
-8. Ninguna excepción cruza las fronteras públicas del runtime o C ABI.
+8. Ninguna excepción cruza las fronteras públicas.
 9. Toda entrada externa se valida bajo cuotas.
-10. La instrumentación no altera resultados.
-11. Packs concretos, perfiles concretos y adaptadores específicos viven fuera de MSPA.
-12. Nuevas reglas psicológicas deben conservar trazabilidad y tests de conformidad.
-13. Todo agente activo conserva las seis emociones base con intensidad distinta de cero.
+10. Instrumentación no altera resultados.
+11. Packs y adaptadores concretos viven fuera del core.
+12. Nuevas reglas psicológicas deben conservar trazabilidad y tests.
+13. Una capacidad no se marca como PASS sólo porque esté descrita; debe existir una prueba de conformidad asociada.
 
----
+## 23. Documentos normativos
 
-# 30. Documentos normativos
-
-Los siguientes archivos se mantienen **en sus nombres actuales** y deben permanecer sincronizados con esta implementación:
+Se mantienen bajo sus nombres existentes:
 
 - `docs/MSPA-SPEC-v2.4.md`
 - `docs/MSPA-INTERACTION-CONTRACT-v0.2.md`
 - `docs/MSPA-DOMAIN-PACK-CONTRACT-v0.1.md`
 - `docs/MSPA-CODE-ARCHITECTURE-v0.1.md`
 
-El README es la entrada técnica autocontenida. Si alguna copia normativa diverge del código/README, la divergencia es un defecto que debe corregirse; no autoriza inventar comportamiento.
+La matriz `docs/audit/MSPA-CONFORMANCE-MATRIX.md` enlaza capacidades con implementación y tests para reducir el riesgo de que README y documentos normativos se desincronicen.
