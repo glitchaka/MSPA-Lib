@@ -74,6 +74,7 @@ jobs:
           ./build-mutant/mspa_audit_phase2_system_tests
           ./build-mutant/mspa_audit_followup_tests
           ./build-mutant/mspa_descendant_tests
+          ./build-mutant/mspa_hysteresis_extreme_tests
       - name: Apply deliberate regression
         shell: bash
         env:
@@ -95,9 +96,7 @@ jobs:
           if mutation == "hysteresis":
               Path("src/decision/hysteresis.cpp").write_text('''#include "mspa/decision/hysteresis.hpp"\nnamespace mspa {\nfloat HysteresisPolicy::continuity_bonus(const AgentPsychState&,const ActionOption&,ActionContinuityKey,float)const noexcept{return 0.0f;}\nfloat HysteresisPolicy::switch_threshold(const AgentPsychState&,const ActionOption&,float)const noexcept{return 0.0f;}\n}\n''')
           elif mutation == "hysteresis_double":
-              replace("src/decision/hysteresis.cpp",
-                      "return 0.5f*full*(1.0f-std::clamp(urgency,0.0f,1.0f));",
-                      "return full*(1.0f-std::clamp(urgency,0.0f,1.0f));")
+              Path("src/decision/hysteresis.cpp").write_text('''#include "mspa/decision/hysteresis.hpp"\n#include "mspa/psychology/personality.hpp"\n#include <algorithm>\nnamespace mspa {\nfloat HysteresisPolicy::continuity_bonus(const AgentPsychState&a,const ActionOption&o,ActionContinuityKey current,float urgency)const noexcept{if(!current.valid()||o.continuity!=current)return 0;const auto p=PersonalitySystem{}.derive(a.personality);const float full=0.2f*p.switch_resistance+0.25f*std::clamp(o.progress,0.0f,1.0f)+0.25f*std::clamp(o.interruption_cost,0.0f,1.0f)+0.15f*std::clamp(o.context_stability,0.0f,1.0f);return full*(1.0f-std::clamp(urgency,0.0f,1.0f));}\nfloat HysteresisPolicy::switch_threshold(const AgentPsychState&a,const ActionOption&o,float urgency)const noexcept{const auto p=PersonalitySystem{}.derive(a.personality);const float full=0.05f+0.25f*p.switch_resistance+0.2f*std::clamp(o.interruption_cost,0.0f,1.0f)+0.15f*std::clamp(o.progress,0.0f,1.0f);return full*(1.0f-std::clamp(urgency,0.0f,1.0f));}\n}\n''')
           elif mutation == "inheritance":
               replace("src/runtime/descendant.cpp",
                       "if (init_spec.inherited_learning_policy == InheritedLearningPolicy::Mean &&",
@@ -132,7 +131,7 @@ jobs:
           cmake --build build-mutant --parallel 2
           case "$MUTATION" in
             rebase|quotas|canonical_order) TEST=./build-mutant/mspa_audit_phase2_system_tests ;;
-            hysteresis_double) TEST=./build-mutant/mspa_audit_followup_tests ;;
+            hysteresis_double) TEST=./build-mutant/mspa_hysteresis_extreme_tests ;;
             inheritance) TEST=./build-mutant/mspa_descendant_tests ;;
             *) TEST=./build-mutant/mspa_audit_phase2_behavior_tests ;;
           esac
