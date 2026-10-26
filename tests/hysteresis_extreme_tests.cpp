@@ -31,13 +31,14 @@ std::vector<ActionOption> make_options(AgentId actor, float gap, bool extreme) {
     incumbent.interruption_cost = extreme ? 1.0f : 0.30f;
     incumbent.context_stability = 1.0f;
 
+    // Keep every base-utility term identical between candidates except cost.
+    // That makes `gap` an actual pre-hysteresis utility advantage instead of
+    // accidentally mixing progress/interruption differences into the test.
     ActionOption better = incumbent;
     better.type = ActionTypeId(2);
     better.instance = ActionInstanceId(2);
     better.continuity = ActionContinuityKey(2);
     better.cost = 0.60f - gap;
-    better.progress = 0.0f;
-    better.interruption_cost = 0.0f;
     return {incumbent, better};
 }
 
