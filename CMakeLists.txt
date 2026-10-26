@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(MSPA_Lib VERSION 1.1.2 LANGUAGES C CXX)
+project(MSPA_Lib VERSION 1.1.3 LANGUAGES C CXX)
 option(MSPA_BUILD_TESTS "Build MSPA tests" ON)
 option(MSPA_BUILD_BENCHMARKS "Build MSPA microbenchmarks" OFF)
 option(MSPA_BUILD_SHARED "Build MSPA as shared library" OFF)
@@ -13,7 +13,7 @@ add_library(mspa ${MSPA_LIBRARY_TYPE}
  src/semantics/registry.cpp src/semantics/inference.cpp src/semantics/domain_pack.cpp
  src/psychology/personality.cpp src/psychology/profile.cpp src/psychology/profile_runtime.cpp src/psychology/values.cpp src/psychology/beliefs.cpp src/psychology/appraisal.cpp src/psychology/emotions.cpp src/psychology/mood.cpp src/psychology/goals.cpp src/psychology/memory.cpp src/psychology/relationships.cpp src/psychology/learning.cpp src/psychology/reappraisal.cpp src/psychology/engine.cpp
  src/decision/response_curve.cpp src/decision/consideration.cpp src/decision/decision.cpp src/decision/hysteresis.cpp
- src/runtime/agent_store.cpp src/runtime/runtime.cpp
+ src/runtime/agent_store.cpp src/runtime/runtime.cpp src/runtime/descendant.cpp
  src/persistence/state_transfer.cpp src/persistence/serialization.cpp
  src/validation/limits.cpp src/diagnostics/trace.cpp src/c/c_api.cpp)
 add_library(MSPA::mspa ALIAS mspa)
@@ -38,7 +38,7 @@ install(EXPORT MSPATargets NAMESPACE MSPA:: DESTINATION ${CMAKE_INSTALL_LIBDIR}/
 install(FILES ${CMAKE_CURRENT_BINARY_DIR}/MSPAConfig.cmake ${CMAKE_CURRENT_BINARY_DIR}/MSPAConfigVersion.cmake DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/MSPA)
 if(MSPA_BUILD_TESTS)
  enable_testing()
- foreach(test_name IN ITEMS core semantics psychology profiles emotion_baseline runtime persistence c_api security audit_determinism audit_behavior audit_security_time audit_trace_scenario audit_phase2_behavior audit_phase2_system audit_phase2_c_abi audit_followup)
+ foreach(test_name IN ITEMS core semantics psychology profiles descendant emotion_baseline runtime persistence c_api security audit_determinism audit_behavior audit_security_time audit_trace_scenario audit_phase2_behavior audit_phase2_system audit_phase2_c_abi audit_followup)
    add_executable(mspa_${test_name}_tests tests/${test_name}_tests.cpp)
    target_compile_features(mspa_${test_name}_tests PRIVATE cxx_std_17)
    target_link_libraries(mspa_${test_name}_tests PRIVATE MSPA::mspa)
