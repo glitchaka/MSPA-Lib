@@ -60,18 +60,20 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        mutation: [hysteresis, baseline, rebase, quotas, canonical_order, reappraisal]
+        mutation: [hysteresis, hysteresis_double, inheritance, baseline, rebase, quotas, canonical_order, reappraisal]
     steps:
       - uses: actions/checkout@v4
       - name: Configure mutation build
         run: cmake -S . -B build-mutant -DMSPA_BUILD_TESTS=ON -DCMAKE_BUILD_TYPE=Release
-      - name: Build phase 2 public API tests
+      - name: Build public API tests
         run: cmake --build build-mutant --parallel 2
       - name: Confirm originals pass
         shell: bash
         run: |
           ./build-mutant/mspa_audit_phase2_behavior_tests
           ./build-mutant/mspa_audit_phase2_system_tests
+          ./build-mutant/mspa_audit_followup_tests
+          ./build-mutant/mspa_descendant_tests
       - name: Apply deliberate regression
         shell: bash
         env:
@@ -92,6 +94,14 @@ jobs:
 
           if mutation == "hysteresis":
               Path("src/decision/hysteresis.cpp").write_text('''#include "mspa/decision/hysteresis.hpp"\nnamespace mspa {\nfloat HysteresisPolicy::continuity_bonus(const AgentPsychState&,const ActionOption&,ActionContinuityKey,float)const noexcept{return 0.0f;}\nfloat HysteresisPolicy::switch_threshold(const AgentPsychState&,const ActionOption&,float)const noexcept{return 0.0f;}\n}\n''')
+          elif mutation == "hysteresis_double":
+              replace("src/decision/hysteresis.cpp",
+                      "return 0.5f*full*(1.0f-std::clamp(urgency,0.0f,1.0f));",
+                      "return full*(1.0f-std::clamp(urgency,0.0f,1.0f));")
+          elif mutation == "inheritance":
+              replace("src/runtime/descendant.cpp",
+                      "if (init_spec.inherited_learning_policy == InheritedLearningPolicy::Mean &&",
+                      "if (false && init_spec.inherited_learning_policy == InheritedLearningPolicy::Mean &&")
           elif mutation == "baseline":
               replace("src/psychology/emotions.cpp",
                       "float clamp_baseline(float value){return std::clamp(value,active_emotion_floor,0.15f);}",
@@ -122,6 +132,8 @@ jobs:
           cmake --build build-mutant --parallel 2
           case "$MUTATION" in
             rebase|quotas|canonical_order) TEST=./build-mutant/mspa_audit_phase2_system_tests ;;
+            hysteresis_double) TEST=./build-mutant/mspa_audit_followup_tests ;;
+            inheritance) TEST=./build-mutant/mspa_descendant_tests ;;
             *) TEST=./build-mutant/mspa_audit_phase2_behavior_tests ;;
           esac
           LOG="audit-mutation-${MUTATION}.log"
